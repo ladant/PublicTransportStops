@@ -88,6 +88,7 @@ function applyI18n() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   $('lang').textContent = t('lang');
   applyTheme();
+  $('tramChip').title = t('tramTitle');
   $('locate').title = t('myLocation');
   $('locate').setAttribute('aria-label', t('myLocation'));
   renderLegend();
