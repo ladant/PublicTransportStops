@@ -1,6 +1,6 @@
 const dict = {
   cs: {
-    title: 'Bus na výlet',
+    title: 'Co pojede?',
     tagline: 'Klikněte do mapy a uvidíte, odkud kdy něco jede.',
     date: 'Den',
     winA: 'Tam',
@@ -49,7 +49,7 @@ const dict = {
     legendBus: 'zastávka',
   },
   en: {
-    title: 'Bus na výlet',
+    title: 'Co pojede?',
     tagline: 'Tap the map to see where something departs and when.',
     date: 'Day',
     winA: 'Out',
