@@ -25,6 +25,10 @@ tramvaje a metro a o konkrétní příjezdy a odjezdy.
 - **Výřez mapy:** zastávky v celé viditelné části mapy, přepočet po každém posunu či přiblížení.
   Nad ~30 km výšky výřezu výzva k přiblížení.
 - **✕ Zrušit výběr:** zruší bod, výřez, kartu i zvýraznění a oddálí na přehled regionu (zoom 9).
+- **Hledání obce** v poli nahoře v mapě: ~12 500 belgických obcí, vesnic a osad z GeoNames, i podle
+  francouzských, nizozemských, německých, anglických a českých tvarů (Liège / Luik / Lutych) a bez
+  diakritiky. Výběr mapu přiblíží (města zoom 12, vesnice 13,5); Enter vezme první výsledek.
+  Seznam (`web/public/places.json`, 140 kB gzip) se stáhne až při prvním hledání a funguje offline.
 
 ### Nastavení nad mapou
 - Den v rozsahu platnosti dat (aktuálně **14 dní dopředu**).
@@ -83,6 +87,7 @@ Podrobný formát dat: [`docs/data-format.md`](data-format.md).
 | Výpočet v prohlížeči | `web/src/core.js` | výběr zastávek, okna, příjezdy/odjezdy, URL stav |
 | Rozhraní | `web/src/main.js`, `style.css`, `i18n.js` | mapa, karta, seznam linek |
 | Offline | `web/public/sw.js` | cache aplikace, dat a mapových podkladů |
+| Seznam obcí | `scripts/build_places.py` → `web/public/places.json` | jednorázově z GeoNames, v repozitáři; po přegenerování zvýšit `PLACES_VERSION` v `main.js` |
 | CI/CD | `.github/workflows/build.yml` | testy, denní sestavení, nasazení na Pages |
 
 ### Testy
@@ -124,7 +129,7 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 - Commit `data-build.txt` drží plánovaný workflow aktivní (GitHub ho jinak po 60 dnech vypne).
 - Když zdroj selže nebo vrátí zastaralý feed, použije se další zdroj, případně poslední platná verze.
 - Když sestavení selže, na webu zůstanou poslední platná data a GitHub pošle e-mail.
-- Licence dat CC BY 4.0: patička uvádí dopravce, datum dat a OpenStreetMap / OpenFreeMap.
+- Licence dat CC BY 4.0: patička uvádí dopravce, datum dat, GeoNames (obce) a OpenStreetMap / OpenFreeMap.
 
 ## 5. Rozhodnutí v průběhu
 
@@ -137,6 +142,7 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 | „1. čas / 2. čas“ místo „Tam / Zpět“ | aplikace nezná směr cesty, jen čas; zpáteční cesta může začít jinde |
 | Příjezdy/odjezdy volitelně u každého času | ráno zajímá odkud a kdy přijedu, odpoledne kam a kdy odjedu |
 | Karta zastávky pod mapou místo popupu | popup se na mobilu schovával; na mapě zůstal jen malý štítek |
+| Hledání obcí ze statického seznamu (GeoNames) místo online geokodéru | funguje offline, bez limitů a cizí zátěže; stačí obce, ne adresy |
 | Mobil jako primární design | nastavení úsporné a sbalitelné, testováno na 384 a 360 px |
 | `main` chráněn jen proti smazání a force-push | povinné PR by blokovalo denní commit `data-build.txt` |
 
@@ -200,3 +206,4 @@ chybí). Hlášení vyhlášená po 17:00 se projeví až další den – odkaz 
 | #8 | tmavý lem trasy linky |
 | #9 | příjezdy/odjezdy u každého času, rozbalení spoje, formát dat v2 |
 | #10 | špendlík, výřez mapy, ✕ zrušit vše, 14 dní dat, tento dokument |
+| #11 | hledání obcí v mapě (GeoNames) |

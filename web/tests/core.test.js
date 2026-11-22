@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
-  cell, computeSelection, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange,
+  buildPlaceIndex, cell, computeSelection, searchPlaces, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange,
   decodePolyline, normWindow, parseTile, passesBbox, passesCircle, tileBbox, tilesForBbox, tilesForCircle,
 } from '../src/core.js';
 
@@ -183,4 +183,24 @@ test('výřez mapy místo okruhu', () => {
   assert.equal(back.area, 'v');
   assert.equal(back.z, 13.5);
   assert.equal(decodeState('#lat=50&lon=4', { r: 3, a: [0, 1], b: null, modes: ['bus'] }).area, 'c');
+});
+
+test('hledání obcí', () => {
+  const data = {
+    p: ['Liège', 'Oost-Vlaanderen'],
+    d: [
+      ['Liège', 50.63, 5.57, 0, 5, 'Lüttich|Luik|Lutych'],
+      ['Gent', 51.05, 3.72, 1, 5, 'Ghent|Gand'],
+      ['Lierneux', 50.28, 5.79, 0, 2, ''],
+      ['Sint-Martens-Leerne', 51.01, 3.58, 1, 0, ''],
+    ],
+  };
+  const idx = buildPlaceIndex(data);
+  assert.deepEqual(searchPlaces(idx, 'lie').map((h) => h.name), ['Liège', 'Lierneux']);
+  assert.equal(searchPlaces(idx, 'luik')[0].label, 'Luik');
+  assert.equal(searchPlaces(idx, 'luik')[0].name, 'Liège');
+  assert.equal(searchPlaces(idx, 'liege')[0].prov, 'Liège');          // bez diakritiky
+  assert.equal(searchPlaces(idx, 'leerne')[0].name, 'Sint-Martens-Leerne'); // začátek slova
+  assert.equal(searchPlaces(idx, 'gand')[0].name, 'Gent');
+  assert.deepEqual(searchPlaces(idx, 'g'), []);
 });

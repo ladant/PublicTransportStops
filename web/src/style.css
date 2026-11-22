@@ -146,6 +146,33 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); cursor: pointer;
 }
 .fab-reset { top: 58px; color: var(--text); }
+
+/* hledání obce: pole nahoře v mapě mezi tlačítkem polohy a zoomem */
+.search {
+  position: absolute; z-index: 4; top: 10px; left: 60px; right: 52px; max-width: 360px;
+  display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); color: var(--muted);
+}
+.search:focus-within { border-color: var(--accent); }
+.search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none;
+  font: inherit; font-size: 14px; color: var(--text);
+}
+.qres {
+  position: absolute; top: 44px; left: 0; right: 0; margin: 0; padding: 4px 0; list-style: none;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.2); overflow: hidden;
+}
+.qres[hidden] { display: none; }
+.qres button {
+  display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+  padding: 8px 14px; font-size: 14px; color: var(--text);
+}
+.qres button span { color: var(--muted); font-weight: 400; }
+.qres button small { display: block; color: var(--muted); font-size: 12px; }
+.qres button:hover, .qres button:focus-visible { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); outline: 0; }
+.qres .none { padding: 8px 14px; font-size: 13px; color: var(--muted); }
 .fab-reset[hidden] { display: none; }
 .legend {
   position: absolute; left: 8px; bottom: 26px; z-index: 2;
