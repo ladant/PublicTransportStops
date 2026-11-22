@@ -37,7 +37,11 @@ export function circleBbox(lat, lon, rKm) {
 }
 
 export function tilesForCircle(manifest, lat, lon, rKm) {
-  const [s, w, n, e] = circleBbox(lat, lon, rKm);
+  return tilesForBbox(manifest, circleBbox(lat, lon, rKm));
+}
+
+/** Dlaždice, které protínají obdélník [jih, západ, sever, východ] (výřez mapy). */
+export function tilesForBbox(manifest, [s, w, n, e]) {
   return manifest.tiles.filter((k) => {
     const [ts, tw, tn, te] = tileBbox(k, manifest.grid);
     return ts <= n && tn >= s && tw <= e && te >= w;
@@ -166,7 +170,8 @@ export function computeSelection(stops, routes, params) {
   const lines = new Map();
   for (const s of stops) {
     const dist = haversineKm(params.lat, params.lon, s.lat, s.lon);
-    if (dist > params.r) continue;
+    // výřez mapy (bbox) nebo okruh kolem bodu
+    if (params.bbox ? !inBbox(s.lat, s.lon, params.bbox) : dist > params.r) continue;
     const depsA = winA ? stopDepartures(s, params.day, winA, routes, params.modes, params.ak || 'dep') : [];
     const depsB = winB ? stopDepartures(s, params.day, winB, routes, params.modes, params.bk || 'dep') : [];
     if (!depsA.length && !depsB.length) continue;
@@ -236,6 +241,15 @@ export function decodePolyline(s) {
   return pts;
 }
 
+export function inBbox(lat, lon, [s, w, n, e]) {
+  return lat >= s && lat <= n && lon >= w && lon <= e;
+}
+
+/** Varianta trasy vede přes výřez (aspoň jeden bod uvnitř). */
+export function passesBbox(pts, bbox) {
+  return pts.some(([a, b]) => inBbox(a, b, bbox));
+}
+
 /** Varianta trasy vede přes okruh (aspoň jeden bod uvnitř). */
 export function passesCircle(pts, lat, lon, rKm) {
   return pts.some(([a, b]) => haversineKm(lat, lon, a, b) <= rKm);
@@ -256,6 +270,10 @@ export function encodeState(st) {
   const w = (x) => `${fmtHm(x[0]).replace(':', '')}-${fmtHm(x[1]).replace(':', '')}`;
   p.set('a', st.a ? w(st.a) : 'off');
   if (st.b) p.set('b', w(st.b));
+  if (st.area === 'v') {
+    p.set('o', 'v');
+    if (st.z != null) p.set('z', st.z.toFixed(2));
+  }
   if (st.ak) p.set('ak', st.ak);
   if (st.bk) p.set('bk', st.bk);
   if (st.modes && st.modes.size !== ALL_MODES.length) p.set('m', ALL_MODES.filter((m) => st.modes.has(m)).join(','));
@@ -285,6 +303,10 @@ export function decodeState(hash, defaults) {
   else if (p.has('a') && win(p.get('a'))) st.a = win(p.get('a'));
   if (p.has('b')) st.b = win(p.get('b'));
   for (const k of ['ak', 'bk']) if (['arr', 'dep'].includes(p.get(k))) st[k] = p.get(k);
+  // oblast: o=v = výřez mapy (lat/lon je pak střed mapy a z přiblížení)
+  st.area = p.get('o') === 'v' ? 'v' : 'c';
+  const z = Number(p.get('z'));
+  if (p.has('z') && Number.isFinite(z) && z >= 3 && z <= 20) st.z = z;
   if (p.has('m')) {
     const ms = p.get('m').split(',').filter((x) => ALL_MODES.includes(x));
     if (ms.length) st.modes = new Set(ms);

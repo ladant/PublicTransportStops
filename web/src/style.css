@@ -145,6 +145,8 @@ button { font: inherit; color: inherit; }
   background: var(--surface); border: 1px solid var(--line); border-radius: 50%;
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.15); cursor: pointer;
 }
+.fab-reset { top: 58px; color: var(--text); }
+.fab-reset[hidden] { display: none; }
 .legend {
   position: absolute; left: 8px; bottom: 26px; z-index: 2;
   display: flex; flex-wrap: wrap; gap: 2px 8px; max-width: calc(100% - 70px);
@@ -176,9 +178,16 @@ button { font: inherit; color: inherit; }
 
 /* ---------- pod mapou */
 .below { padding: 8px 12px 24px; }
-.radius { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
-.radius > span { white-space: nowrap; min-width: 92px; }
-.radius output { color: var(--text); }
+.area-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.seg { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  border: 0; background: var(--surface); padding: 0 10px; min-height: 32px; font-size: 13px; cursor: pointer; color: var(--muted);
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--text); font-weight: 600; }
+.radius { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.radius[hidden] { display: none; }
+.radius output { white-space: nowrap; min-width: 52px; }
 .radius input { flex: 1; min-height: 32px; accent-color: var(--accent); }
 
 .notice { margin: 8px 0 0; padding: 8px 10px; background: var(--warn-bg); color: var(--warn-text); border-radius: 8px; font-size: 13px; }

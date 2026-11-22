@@ -3,7 +3,8 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import {
-  computeSelection, dateRange, decodePolyline, passesCircle, dayIndex, decodeState, encodeState, feedsOutOfRange, fmtHm,
+  tilesForBbox,
+  computeSelection, dateRange, decodePolyline, passesBbox, passesCircle, dayIndex, decodeState, encodeState, feedsOutOfRange, fmtHm,
   parseHm, parseTile, tilesForCircle,
 } from './core.js';
 import { fmtDate, fmtKm, getLang, setLang, t } from './i18n.js';
@@ -99,6 +100,8 @@ function applyI18n() {
   renderSummary();
   $('tramChip').title = t('tramTitle');
   $('locate').title = t('myLocation');
+  $('reset').title = t('reset');
+  $('reset').setAttribute('aria-label', t('reset'));
   $('locate').setAttribute('aria-label', t('myLocation'));
   renderLegend();
   renderFoot();
@@ -114,9 +117,10 @@ function feedOf(stopId) {
 }
 
 function walkUrl(from, to) {
+  // bez výchozího bodu (výřez mapy) vede trasa z aktuální polohy telefonu
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (ios) return `https://maps.apple.com/?saddr=${from.lat},${from.lon}&daddr=${to.lat},${to.lon}&dirflg=w`;
-  return `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lon}&destination=${to.lat},${to.lon}&travelmode=walking`;
+  if (ios) return `https://maps.apple.com/?${from ? `saddr=${from.lat},${from.lon}&` : ''}daddr=${to.lat},${to.lon}&dirflg=w`;
+  return `https://www.google.com/maps/dir/?api=1${from ? `&origin=${from.lat},${from.lon}` : ''}&destination=${to.lat},${to.lon}&travelmode=walking`;
 }
 
 // ---------- data
@@ -289,7 +293,39 @@ function makeIcon(color, square, big) {
   return { image: g.getImageData(0, 0, size, size), ratio };
 }
 
+// špendlík vybraného bodu: tvarem i barvou jiný než kulaté barevné zastávky
+function makePin(fill, inner) {
+  const ratio = 2;
+  const w = 28 * ratio, h = 38 * ratio;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  const r = w / 2 - 2 * ratio;
+  const cx = w / 2, cy = r + 2 * ratio;
+  g.beginPath();
+  g.moveTo(cx, h - 1 * ratio);
+  g.bezierCurveTo(cx - r * 0.35, h - 12 * ratio, cx - r, cy + r * 0.6, cx - r, cy);
+  g.arc(cx, cy, r, Math.PI, 0);
+  g.bezierCurveTo(cx + r, cy + r * 0.6, cx + r * 0.35, h - 12 * ratio, cx, h - 1 * ratio);
+  g.closePath();
+  g.fillStyle = fill;
+  g.strokeStyle = inner;
+  g.lineWidth = 2 * ratio;
+  g.fill();
+  g.stroke();
+  g.beginPath();
+  g.arc(cx, cy, r * 0.38, 0, Math.PI * 2);
+  g.fillStyle = inner;
+  g.fill();
+  return { image: g.getImageData(0, 0, w, h), ratio };
+}
+
 function addIcons() {
+  if (!map.hasImage('pin')) {
+    const { image, ratio } = isDark() ? makePin('#f9fafb', '#111827') : makePin('#111827', '#ffffff');
+    map.addImage('pin', image, { pixelRatio: ratio });
+  }
   for (const st of ['a', 'b', 'ab']) {
     for (const rail of [false, true]) {
       const name = `stop-${st}-${rail ? 'rail' : 'bus'}`;
@@ -359,8 +395,8 @@ function setupLayers() {
     },
   });
   map.addLayer({
-    id: 'point', type: 'circle', source: 'point',
-    paint: { 'circle-radius': 7, 'circle-color': accent, 'circle-stroke-color': '#fff', 'circle-stroke-width': 3 },
+    id: 'point', type: 'symbol', source: 'point',
+    layout: { 'icon-image': 'pin', 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
   });
   mapReady = true;
   drawCircle();
@@ -381,7 +417,7 @@ function initMap() {
     container: 'map',
     style: isDark() ? STYLE_DARK : STYLE_LIGHT,
     center: hasPoint ? [state.lon, state.lat] : v.center,
-    zoom: hasPoint ? zoomForRadius(state.r) : v.zoom,
+    zoom: hasPoint ? (state.area === 'v' && state.z ? state.z : zoomForRadius(state.r)) : v.zoom,
     attributionControl: { compact: true },
     dragRotate: false,
     pitchWithRotate: false,
@@ -407,10 +443,14 @@ function initMap() {
     const hit = mapReady && map.queryRenderedFeatures(e.point, { layers: ['stops'] })
       .filter((f) => !f.properties.dim)[0];
     if (hit) selectStop(hit.properties.id);
-    else setPoint(e.lngLat.lat, e.lngLat.lng);
+    else if (state.area !== 'v') setPoint(e.lngLat.lat, e.lngLat.lng);
   });
   // dlouhý stisk na mobilu (contextmenu ho v mobilních prohlížečích nahrazuje)
   map.on('contextmenu', (e) => setPoint(e.lngLat.lat, e.lngLat.lng));
+  map.on('moveend', onMapMove);
+  map.once('load', () => {
+    if (state.area === 'v') recompute();
+  });
   map.on('mousemove', (e) => {
     if (!mapReady) return;
     const hit = map.queryRenderedFeatures(e.point, { layers: ['stops'] }).length;
@@ -426,7 +466,8 @@ function zoomForRadius(r) {
 
 function drawCircle() {
   if (!mapReady) return;
-  if (state.lat == null) {
+  updateResetButton();
+  if (state.lat == null || state.area === 'v') {
     map.getSource('circle').setData(emptyFc());
     map.getSource('point').setData(emptyFc());
     return;
@@ -438,6 +479,8 @@ function drawCircle() {
 }
 
 function setPoint(lat, lon, fly = false) {
+  state.area = 'c';
+  renderArea();
   state.lat = lat;
   state.lon = lon;
   highlight = null;
@@ -446,6 +489,80 @@ function setPoint(lat, lon, fly = false) {
   drawCircle();
   if (fly) map.flyTo({ center: [lon, lat], zoom: zoomForRadius(state.r) });
   recompute();
+}
+
+// ---------- oblast: okruh kolem bodu, nebo výřez mapy
+
+const MAX_VIEW_DEG = 0.3; // větší výřez (~30 km) se nepočítá, stahovalo by se moc dat
+
+function viewBbox() {
+  const b = map.getBounds();
+  return [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+}
+
+function renderArea() {
+  for (const b of document.querySelectorAll('.seg button')) {
+    const on = b.dataset.area === state.area;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  }
+  $('radiusRow').hidden = state.area === 'v';
+}
+
+function setArea(area) {
+  if (state.area === area) return;
+  state.area = area;
+  highlight = null;
+  clearStop();
+  if (area === 'v') {
+    const c = map.getCenter();
+    state.lat = c.lat;
+    state.lon = c.lng;
+    state.z = map.getZoom();
+  } else {
+    // z výřezu do okruhu: bod uprostřed mapy
+    const c = map.getCenter();
+    state.lat = c.lat;
+    state.lon = c.lng;
+    state.z = undefined;
+  }
+  renderArea();
+  saveState();
+  drawCircle();
+  recompute();
+}
+
+let moveTimer = null;
+function onMapMove() {
+  if (state.area !== 'v') return;
+  clearTimeout(moveTimer);
+  moveTimer = setTimeout(() => {
+    const c = map.getCenter();
+    state.lat = c.lat;
+    state.lon = c.lng;
+    state.z = map.getZoom();
+    saveState();
+    recompute();
+  }, 250);
+}
+
+function updateResetButton() {
+  $('reset').hidden = !(state && (state.lat != null || state.area === 'v'));
+}
+
+/** Zavřít vše: zrušit bod, výřez, kartu i zvýraznění a mírně oddálit na přehled regionu. */
+function resetAll() {
+  state.area = 'c';
+  state.lat = null;
+  state.lon = null;
+  state.z = undefined;
+  highlight = null;
+  clearStop();
+  renderArea();
+  saveState();
+  drawCircle();
+  recompute();
+  if (map.getZoom() > 9) map.easeTo({ zoom: 9, duration: 500 });
 }
 
 // ---------- trasa zvýrazněné linky
@@ -483,7 +600,8 @@ async function drawRoute() {
   gis.forEach((gi, i) => {
     for (const v of all[i]) {
       // jen varianty, které vedou přes zvolený okruh
-      if (!passesCircle(v.pts, state.lat, state.lon, state.r * 1.05)) continue;
+      const inside = state.area === 'v' ? passesBbox(v.pts, viewBbox()) : passesCircle(v.pts, state.lat, state.lon, state.r * 1.05);
+      if (!inside) continue;
       features.push({
         type: 'Feature',
         properties: { color: `#${routes[gi][3]}` },
@@ -521,6 +639,11 @@ function renderStops() {
 
 async function recompute() {
   const seq = ++computeSeq;
+  updateResetButton();
+  if (state.area === 'v' && !map) {
+    setStatus(t('loading'));
+    return; // dopočítá se po načtení mapy
+  }
   if (state.lat == null) {
     selection = null;
     renderStops();
@@ -540,7 +663,19 @@ async function recompute() {
   if (outOfRange.length) showNotice(t('outOfRange', outOfRange.map((f) => f.name).join(', ')));
   else hideNotice();
 
-  const keys = tilesForCircle(manifest, state.lat, state.lon, state.r);
+  let bbox = null;
+  if (state.area === 'v') {
+    bbox = viewBbox();
+    if (bbox[2] - bbox[0] > MAX_VIEW_DEG) {
+      selection = null;
+      renderStops();
+      renderLines();
+      clearStop();
+      setStatus(t('zoomIn'));
+      return;
+    }
+  }
+  const keys = bbox ? tilesForBbox(manifest, bbox) : tilesForCircle(manifest, state.lat, state.lon, state.r);
   if (keys.some((k) => !tileCache.has(k))) setStatus(t('loading'));
   let tiles;
   try {
@@ -552,7 +687,7 @@ async function recompute() {
   }
   if (seq !== computeSeq) return;
   const params = {
-    lat: state.lat, lon: state.lon, r: state.r,
+    lat: state.lat, lon: state.lon, r: state.r, bbox,
     day: dayIndex(manifest.start, state.d), a: state.a, b: state.b, ak: state.ak, bk: state.bk, modes: state.modes,
   };
   selection = computeSelection(tiles.flat(), routes, params);
@@ -653,11 +788,11 @@ function renderStopCard() {
       <h3>${esc(s.name)}</h3>
       <button type="button" class="x" aria-label="${esc(t('close'))}">×</button>
     </header>
-    <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)} · ${esc(t('away', fmtKm(s.dist)))}</p>
+    <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)}${state.area === 'v' ? '' : ` · ${esc(t('away', fmtKm(s.dist)))}`}</p>
     ${section('a', 'a', s.depsA)}
     ${section('b', 'b', s.depsB)}
     <p class="links">
-      <a href="${esc(walkUrl(state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
+      <a href="${esc(walkUrl(state.area === 'v' ? null : state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
       ${feed?.alerts ? `<a href="${esc(feed.alerts)}" target="_blank" rel="noopener">${t('alerts')} (${esc(feed.name)})</a>` : ''}
     </p>`;
   card.hidden = false;
@@ -731,6 +866,9 @@ async function main() {
   $('controls').addEventListener('input', onControlsChange);
   $('controls').addEventListener('change', onControlsChange);
   $('radius').addEventListener('input', onControlsChange);
+  for (const b of document.querySelectorAll('.seg button')) b.addEventListener('click', () => setArea(b.dataset.area));
+  $('reset').addEventListener('click', resetAll);
+  renderArea();
   $('stop').addEventListener('click', (e) => {
     if (e.target.closest('.x')) clearStop();
   });
@@ -796,7 +934,8 @@ async function main() {
     renderSummary();
     writeControls();
     drawCircle();
-    if (moved && state.lat != null) map.flyTo({ center: [state.lon, state.lat], zoom: zoomForRadius(state.r) });
+    if (moved && state.lat != null) map.flyTo({ center: [state.lon, state.lat], zoom: state.area === 'v' && state.z ? state.z : zoomForRadius(state.r) });
+    renderArea();
     recompute();
   });
   recompute();
