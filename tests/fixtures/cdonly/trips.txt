@@ -1,0 +1,2 @@
+route_id,service_id,trip_id
+B1,D1,X1

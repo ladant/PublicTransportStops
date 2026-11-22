@@ -1,0 +1,9 @@
+stop_id,stop_name,stop_lat,stop_lon,location_type,parent_station
+S1,Centrum,50.85,4.35,0,
+S1b,Centrum West,50.8501,4.3499,0,
+STA,Gare,50.80,4.40,1,
+P1,Gare perron 1,50.8001,4.4001,0,STA
+P2,Gare perron 2,50.8002,4.4002,0,STA
+S3,Les,50.90,4.50,0,
+S4,Konecna,50.95,4.55,0,
+S5,Bez casu,50.875,4.425,0,

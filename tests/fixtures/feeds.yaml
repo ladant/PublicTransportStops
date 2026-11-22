@@ -1,0 +1,19 @@
+# Konfigurace pro testy a lokální vývoj (bez stahování; zdroje se zadají přes --local).
+timezone: Europe/Brussels
+days: 28
+grid: {dlat: 0.1, dlon: 0.15}
+default_view: {center: [4.4, 50.85], zoom: 10}
+feeds:
+  - code: mini
+    name: Test Bus
+    license: CC-BY-4.0
+    alerts_url: https://example.org/alerts
+    sources: []
+  - code: cdonly
+    name: Jen Data
+    sources: []
+  - code: synth
+    name: Synthetic BE
+    license: CC0
+    alerts_url: https://example.org/alerts
+    sources: []
