@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             inputs.append((feed, Path(local[feed.code]), None))
             state[feed.code] = "local"
             continue
-        ff = fetch_feed(feed, cache)
+        ff = fetch_feed(feed, cache, today=today)
         if ff is None:
             continue
         inputs.append((feed, ff.path, ff.prev))

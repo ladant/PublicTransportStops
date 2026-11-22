@@ -10,10 +10,11 @@ import urllib.error
 import urllib.request
 import zipfile
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from .config import Feed, MissingVariable, expand
-from .gtfs import find_member
+from .gtfs import GtfsZip, find_member, service_masks
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,12 @@ def is_valid_gtfs_zip(path: Path) -> bool:
         return False
 
 
+def valid_until(path: Path, today: date) -> date | None:
+    """Poslední den, kdy feed obsahuje nějakou službu (None = nelze zjistit)."""
+    _, _, vmax = service_masks(GtfsZip(path), today, 1)
+    return vmax
+
+
 def _fetch(url: str, headers: dict[str, str], meta: dict, dest: Path, timeout: int = 300) -> str:
     """Vrátí 'downloaded' nebo 'not-modified'. Vyhodí výjimku při chybě."""
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **headers})
@@ -70,7 +77,8 @@ def _fetch(url: str, headers: dict[str, str], meta: dict, dest: Path, timeout: i
         raise
 
 
-def fetch_feed(feed: Feed, cache_dir: Path, retries: int = 2) -> FeedFile | None:
+def fetch_feed(feed: Feed, cache_dir: Path, retries: int = 2, today: date | None = None) -> FeedFile | None:
+    today = today or date.today()
     cache_dir.mkdir(parents=True, exist_ok=True)
     current = cache_dir / f"{feed.code}.zip"
     prev = cache_dir / f"{feed.code}.prev.zip"
@@ -91,6 +99,9 @@ def fetch_feed(feed: Feed, cache_dir: Path, retries: int = 2) -> FeedFile | None
                 tmp = cache_dir / f"{feed.code}.new.zip"
                 status = _fetch(url, headers, meta, tmp)
                 if status == "not-modified" and current.exists():
+                    until = valid_until(current, today)
+                    if until is not None and until < today:
+                        raise ValueError(f"beze změny, ale zastaralý (platí jen do {until})")
                     log.info("%s: beze změny (%s)", feed.code, shown)
                     meta_path.write_text(json.dumps(meta, indent=1))
                     return FeedFile(feed.code, current, prev if prev.exists() else None, old_hash or sha256(current), False, shown)
@@ -101,6 +112,10 @@ def fetch_feed(feed: Feed, cache_dir: Path, retries: int = 2) -> FeedFile | None
                 if not is_valid_gtfs_zip(tmp):
                     tmp.unlink(missing_ok=True)
                     raise ValueError("stažený soubor není platný GTFS zip")
+                until = valid_until(tmp, today)
+                if until is not None and until < today:
+                    tmp.unlink(missing_ok=True)
+                    raise ValueError(f"zastaralý feed (platí jen do {until})")
                 new_hash = sha256(tmp)
                 if current.exists() and new_hash != old_hash:
                     current.replace(prev)

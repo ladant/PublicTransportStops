@@ -192,3 +192,37 @@ def test_expand_env():
     assert expand("https://x/${K}", {"K": "abc"}) == "https://x/abc"
     with pytest.raises(MissingVariable):
         expand("${K}", {})
+
+
+def test_download_skips_expired_source(tmp_path):
+    """Zastaralý feed na prvním zdroji se přeskočí a použije se další."""
+    import functools
+    import http.server
+    import shutil
+    import threading
+
+    from busnavylet.config import Source
+    from busnavylet.download import fetch_feed
+
+    srv_dir = tmp_path / "srv"
+    old_dir = tmp_path / "old"
+    shutil.copytree(FIX / "mini", old_dir)
+    (old_dir / "calendar.txt").write_text(
+        "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+        "WK,1,1,1,1,1,0,0,20260101,20260331\nWE,0,0,0,0,0,1,1,20260101,20260331\n")
+    (old_dir / "calendar_dates.txt").write_text("service_id,date,exception_type\n")
+    srv_dir.mkdir()
+    make_zip(old_dir, srv_dir / "old.zip")
+    make_zip(FIX / "mini", srv_dir / "new.zip")
+
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(srv_dir))
+    handler.log_message = lambda *a: None
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        feed = Feed("mini", "Mini", [Source(f"{base}/old.zip"), Source(f"{base}/new.zip")])
+        ff = fetch_feed(feed, tmp_path / "cache", retries=0, today=TODAY)
+        assert ff is not None and ff.source.endswith("/new.zip")
+    finally:
+        httpd.shutdown()
