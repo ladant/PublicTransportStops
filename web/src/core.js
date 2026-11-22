@@ -215,7 +215,7 @@ export function encodeState(st) {
   p.set('r', String(st.r));
   if (st.d) p.set('d', st.d);
   const w = (x) => `${fmtHm(x[0]).replace(':', '')}-${fmtHm(x[1]).replace(':', '')}`;
-  if (st.a) p.set('a', w(st.a));
+  p.set('a', st.a ? w(st.a) : 'off');
   if (st.b) p.set('b', w(st.b));
   if (st.modes && st.modes.size !== ALL_MODES.length) p.set('m', ALL_MODES.filter((m) => st.modes.has(m)).join(','));
   return p.toString();
@@ -240,7 +240,8 @@ export function decodeState(hash, defaults) {
     const b = parseHm(m[2]);
     return a == null || b == null ? null : [a, b];
   };
-  if (p.has('a') && win(p.get('a'))) st.a = win(p.get('a'));
+  if (p.get('a') === 'off') st.a = null;
+  else if (p.has('a') && win(p.get('a'))) st.a = win(p.get('a'));
   if (p.has('b')) st.b = win(p.get('b'));
   if (p.has('m')) {
     const ms = p.get('m').split(',').filter((x) => ALL_MODES.includes(x));

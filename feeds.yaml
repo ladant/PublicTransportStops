@@ -1,4 +1,4 @@
-# Konfigurace datové pipeline „Bus na výlet“.
+# Konfigurace datové pipeline „Co pojede?“.
 #
 # URL a hlavičky mohou obsahovat ${PROMENNA}; hodnota se vezme z proměnné
 # prostředí (v GitHub Actions z GitHub Secrets). Když proměnná chybí,

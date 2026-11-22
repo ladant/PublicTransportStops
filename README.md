@@ -1,4 +1,4 @@
-# Bus na výlet
+# Co pojede?
 
 Webová aplikace (PWA) pro plánování výletů veřejnou dopravou. Po kliknutí do mapy ukáže
 zastávky autobusů a vlaků v okruhu, odkud ve zvolený den a časovém okně něco jede.

@@ -19,7 +19,7 @@ from .gtfs import GtfsZip, find_member, service_masks
 log = logging.getLogger(__name__)
 
 REQUIRED = ("stops.txt", "trips.txt", "stop_times.txt", "routes.txt")
-USER_AGENT = "bus-na-vylet-pipeline/1.0 (+open-source; daily GTFS download)"
+USER_AGENT = "co-pojede-pipeline/1.0 (+open-source; daily GTFS download)"
 
 
 @dataclass
