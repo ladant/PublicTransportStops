@@ -58,7 +58,7 @@ let map = null;
 let mapReady = false;
 let state = null;
 let selection = null;
-let highlight = null; // index linky
+let highlight = null; // klíč linky (l.k)
 let popup = null;
 let computeSeq = 0;
 const tileCache = new Map();
@@ -370,7 +370,7 @@ function renderStops() {
     src.setData(emptyFc());
     return;
   }
-  const hlStops = highlight != null ? selection.lines.find((l) => l.r === highlight)?.stops : null;
+  const hlStops = highlight != null ? selection.lines.find((l) => l.k === highlight)?.stops : null;
   const order = { a: 1, b: 1, ab: 2 };
   src.setData({
     type: 'FeatureCollection',
@@ -416,7 +416,7 @@ async function recompute() {
     day: dayIndex(manifest.start, state.d), a: state.a, b: state.b, modes: state.modes,
   };
   selection = computeSelection(tiles.flat(), routes, params);
-  if (highlight != null && !selection.lines.some((l) => l.r === highlight)) highlight = null;
+  if (highlight != null && !selection.lines.some((l) => l.k === highlight)) highlight = null;
   renderStops();
   renderLines();
   setStatus(selection.stops.length ? t('summary', selection.stops.length, selection.lines.length) : t('noStops'));
@@ -483,7 +483,7 @@ function renderLines() {
     const stops = [...l.stops.values()];
     const heads = [...l.heads];
     const counts = `<span class="cnt a" title="${esc(t('depsA'))}">A ${l.nA}</span>${state.b ? `<span class="cnt b" title="${esc(t('depsB'))}">B ${l.nB}</span>` : ''}`;
-    return `<li><button type="button" class="line${l.r === highlight ? ' on' : ''}" data-r="${l.r}" aria-pressed="${l.r === highlight}">
+    return `<li><button type="button" class="line${l.k === highlight ? ' on' : ''}" data-k="${esc(l.k)}" aria-pressed="${l.k === highlight}">
       <span class="top">${badge(l.route)}<span class="ag">${esc(l.route[5])}</span>${counts}</span>
       <span class="sub"><b>${t('dirs')}:</b> ${esc(heads.slice(0, 4).join(' · '))}${heads.length > 4 ? ' …' : ''}</span>
       <span class="sub"><b>${t('stopsServed')}:</b> ${esc(stops.slice(0, 6).join(', '))}${stops.length > 6 ? ` ${t('more', stops.length - 6)}` : ''}</span>
@@ -559,12 +559,12 @@ async function main() {
   $('lineList').addEventListener('click', (e) => {
     const btn = e.target.closest('button.line');
     if (!btn) return;
-    const r = Number(btn.dataset.r);
-    highlight = highlight === r ? null : r;
+    const k = btn.dataset.k;
+    highlight = highlight === k ? null : k;
     renderStops();
     renderLines();
     if (highlight != null && map) {
-      const l = selection.lines.find((x) => x.r === r);
+      const l = selection.lines.find((x) => x.k === k);
       const pts = selection.stops.filter((s) => l.stops.has(s.id));
       if (pts.length) {
         const b = new maplibregl.LngLatBounds();

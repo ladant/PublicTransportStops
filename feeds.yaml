@@ -19,12 +19,16 @@ default_view:           # výchozí výsek mapy [lon, lat, zoom]
   center: [4.47, 50.64]
   zoom: 7.3
 
+# Hlavní zdroj: Belgian Mobility Open Data Portal (data.belgianmobility.io),
+# GTFS všech čtyř dopravců, aktualizace denně, stažení bez klíče.
+# Ostatní zdroje jsou záložní.
 feeds:
   - code: sncb
     name: SNCB/NMBS
     license: CC-BY-4.0
     alerts_url: https://www.belgiantrain.be/en/travel-info/current-traffic
     sources:
+      - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/nmbssncb/static
       - url: ${SNCB_GTFS_URL}          # oficiální URL po udělení licence (gtfs@sncb.be)
       - url: https://gtfs.irail.be/nmbs/gtfs/latest.zip
       - url: https://files.mobilitydatabase.org/mdb-1859/latest.zip
@@ -34,17 +38,17 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.delijn.be/en/storingen/
     sources:
+      - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/delijn/static
       - url: https://api.delijn.be/gtfs/static/v3/gtfs_transit.zip
         headers:
-          Ocp-Apim-Subscription-Key: ${DELIJN_API_KEY}
-      # Bez klíče není spolehlivé zrcadlo (iRail vrací 404, Mobility Database mdb-684 je zastaralá).
-      # Klíč zdarma: data.delijn.be -> secret DELIJN_API_KEY.
+          Ocp-Apim-Subscription-Key: ${DELIJN_API_KEY}   # klíč zdarma na data.delijn.be
 
   - code: tec
     name: TEC
     license: CC-BY-4.0
     alerts_url: https://www.letec.be/
     sources:
+      - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/tec/static
       - url: ${TEC_GTFS_URL}
       - url: https://files.mobilitydatabase.org/mdb-1868/latest.zip
 
@@ -53,8 +57,7 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.stib-mivb.be/
     sources:
+      - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/stibmivb/static
       - url: https://stibmivb.opendatasoft.com/api/explore/v2.1/catalog/datasets/gtfs-files-production/alternative_exports/gtfszip/
         headers:
           Authorization: Apikey ${STIB_API_KEY}
-      - url: https://files.mobilitydatabase.org/mdb-1088/latest.zip
-      - url: https://gtfs.irail.be/mivb/mivb-gtfs.zip
