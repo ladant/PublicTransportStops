@@ -109,3 +109,15 @@ test('stav v URL', () => {
   assert.deepEqual([...back.modes].sort(), ['bus', 'rail']);
   assert.deepEqual(normWindow([1380, 120]), [1380, 1560]);
 });
+
+test('linky se stejným číslem a dopravcem se v seznamu slučují', () => {
+  const routes = [['IC', 'A', 2, '000000', 'FFFFFF', 'SNCB', 'sncb'], ['IC', 'B', 2, '000000', 'FFFFFF', 'SNCB', 'sncb'], ['IC', 'C', 3, '000000', 'FFFFFF', 'Bus', 'bus']];
+  const mask = new Uint8Array([0xff]);
+  const stop = (id, lat) => ({ id, name: id, lat, lon: 4, modes: 2, heads: ['X', 'Y'], masks: [mask], deps: [480, 0, 0, 0, 490, 1, 1, 0, 500, 2, 0, 0] });
+  const sel = computeSelection([stop('s1', 50), stop('s2', 50.001)], routes, { lat: 50, lon: 4, r: 1, day: 1, a: [0, 1439], b: null, modes: new Set(['bus', 'rail', 'tram']) });
+  assert.equal(sel.lines.length, 2);
+  const ic = sel.lines.find((l) => l.route[6] === 'sncb');
+  assert.equal(ic.nA, 4);
+  assert.deepEqual([...ic.heads].sort(), ['X', 'Y']);
+  assert.equal(ic.stops.size, 2);
+});

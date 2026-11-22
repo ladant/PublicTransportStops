@@ -53,11 +53,9 @@ Se skutečnými daty: `PYTHONPATH=pipeline python -m busnavylet --out web/public
 ## Nasazení
 
 1. V nastavení repozitáře **Settings → Pages** zvolit *Source: GitHub Actions*.
-2. V **Settings → Secrets and variables → Actions** volitelně nastavit klíče:
-   `DELIJN_API_KEY` (data.delijn.be), `STIB_API_KEY` (opendata.stib-mivb.be),
-   `SNCB_GTFS_URL` (po udělení licence SNCB), `TEC_GTFS_URL`.
-   SNCB, TEC a STIB mají záložní zdroje bez klíče. **De Lijn bez klíče nejde**:
-   spolehlivé zrcadlo neexistuje, klíč je zdarma na data.delijn.be.
+2. Data se stahují z [Belgian Mobility Open Data Portal](https://data.belgianmobility.io/en/data.html),
+   který nabízí GTFS všech čtyř dopravců bez klíče. Secrets `DELIJN_API_KEY`, `STIB_API_KEY`,
+   `SNCB_GTFS_URL` a `TEC_GTFS_URL` jsou volitelné a slouží jen pro záložní zdroje.
 3. Workflow běží při pushi do `main`, ručně (*Run workflow*) a denně v 17:00 belgického času.
 
 Provozní pojistky:

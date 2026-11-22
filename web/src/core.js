@@ -168,10 +168,13 @@ export function computeSelection(stops, routes, params) {
     res.push(item);
     for (const [list, key] of [[depsA, 'nA'], [depsB, 'nB']]) {
       for (const x of list) {
-        let l = lines.get(x.r);
+        // linky se stejným číslem, druhem a dopravcem (např. více tras „IC“ u SNCB) = jedna položka
+        const rt = routes[x.r];
+        const k = `${rt[6]}|${rt[2]}|${rt[0]}`;
+        let l = lines.get(k);
         if (!l) {
-          l = { r: x.r, route: routes[x.r], nA: 0, nB: 0, heads: new Set(), stops: new Map() };
-          lines.set(x.r, l);
+          l = { k, r: x.r, route: rt, nA: 0, nB: 0, heads: new Set(), stops: new Map() };
+          lines.set(k, l);
         }
         l[key]++;
         if (x.h) l.heads.add(x.h);
@@ -191,7 +194,7 @@ function compareLines(a, b) {
   return (MODE_ORDER[a.route[2]] - MODE_ORDER[b.route[2]])
     || collator.compare(a.route[6], b.route[6])
     || collator.compare(a.route[0], b.route[0])
-    || a.r - b.r;
+    || a.r - b.r;  // r = první index linky ve skupině
 }
 
 /** Dopravci (feedy), pro které zvolený den leží mimo platnost dat. */
