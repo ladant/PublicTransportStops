@@ -1,6 +1,6 @@
 # Konfigurace pro testy a lokální vývoj (bez stahování; zdroje se zadají přes --local).
 timezone: Europe/Brussels
-days: 28
+days: 10
 grid: {dlat: 0.1, dlon: 0.15}
 default_view: {center: [4.4, 50.85], zoom: 10}
 feeds:

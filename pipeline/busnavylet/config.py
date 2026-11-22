@@ -47,7 +47,7 @@ class Config:
     feeds: list[Feed]
     timezone: str = "Europe/Brussels"
     build_hour: int = 17
-    days: int = 28
+    days: int = 10
     dlat: float = 0.1
     dlon: float = 0.15
     tile_max_gzip_bytes: int = 300_000

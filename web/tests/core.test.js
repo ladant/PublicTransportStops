@@ -93,7 +93,7 @@ test('seznam linek', () => {
 test('platnost dat podle dopravce', () => {
   assert.deepEqual(feedsOutOfRange(manifest, '2026-11-22').map((f) => f.code), ['cdonly']);
   assert.deepEqual(feedsOutOfRange(manifest, '2026-11-24'), []);
-  assert.deepEqual(dateRange(manifest), { min: '2026-11-22', max: '2026-12-19' });
+  assert.deepEqual(dateRange(manifest), { min: '2026-11-22', max: '2026-12-01' });
 });
 
 test('stav v URL', () => {

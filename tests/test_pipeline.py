@@ -78,7 +78,7 @@ def test_parse_time():
 
 def test_manifest(built):
     _, _, m = built
-    assert m["start"] == "2026-11-21" and m["days"] == 29
+    assert m["start"] == "2026-11-21" and m["days"] == 11
     feeds = {f["code"]: f for f in m["feeds"]}
     assert feeds["mini"]["from"] == "2026-11-01" and feeds["mini"]["to"] == "2026-12-31"
     assert feeds["cdonly"]["from"] == "2026-11-23" and feeds["cdonly"]["to"] == "2027-03-01"

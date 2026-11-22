@@ -11,7 +11,7 @@ Kompresi (gzip/brotli) dělá hosting.
   "build": "6174092a97af6e4c",          // hash obsahu; mění se jen se změnou dat
   "built": "2026-11-22T16:00:00+00:00",
   "start": "2026-11-21",                // den 0 bitových masek (včerejšek kvůli spojům po půlnoci)
-  "days": 29,                           // počet dní v maskách
+  "days": 11,                           // počet dní v maskách (days z feeds.yaml + včerejšek)
   "grid": [0.1, 0.15],                  // výška a šířka základní dlaždice ve stupních
   "bbox": [lonMin, latMin, lonMax, latMax],
   "view": {"center": [4.47, 50.64], "zoom": 7.3},
