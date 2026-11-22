@@ -113,6 +113,10 @@ def fetch_feed(feed: Feed, cache_dir: Path, retries: int = 2) -> FeedFile | None
                 return FeedFile(feed.code, current, prev if prev.exists() else None, new_hash, changed, shown)
             except Exception as e:  # noqa: BLE001 – každá chyba zdroje = zkusit další
                 log.warning("%s: %s selhal (pokus %d): %s", feed.code, shown, attempt + 1, e)
+                if isinstance(e, urllib.error.HTTPError) and 400 <= e.code < 500 and e.code not in (408, 429):
+                    break  # 404/401/403: opakování nepomůže, zkus další zdroj
+                if isinstance(e, ValueError):
+                    break  # stažený soubor není GTFS
                 if attempt < retries:
                     time.sleep(2 * (attempt + 1))
 

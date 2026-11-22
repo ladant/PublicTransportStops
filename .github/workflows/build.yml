@@ -111,7 +111,7 @@ jobs:
       # Commit s datem sestavení drží plánovaný workflow aktivní
       # (GitHub ho ve veřejném repozitáři vypne po 60 dnech bez aktivity).
       - name: Záznam data sestavení
-        if: steps.gate.outputs.run == 'true' && github.event_name != 'push' && github.ref_name == github.event.repository.default_branch
+        if: steps.gate.outputs.run == 'true' && github.event_name != 'push' && github.ref == 'refs/heads/main'
         run: |
           TZ=$(python3 -c "import yaml;print(yaml.safe_load(open('feeds.yaml')).get('timezone','Europe/Brussels'))") date +%F > data-build.txt
           git config user.name "github-actions[bot]"
@@ -121,7 +121,7 @@ jobs:
 
   deploy:
     needs: build
-    if: needs.build.outputs.deploy == 'true' && github.ref_name == github.event.repository.default_branch
+    if: needs.build.outputs.deploy == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
