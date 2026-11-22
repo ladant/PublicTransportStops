@@ -7,6 +7,7 @@
     <meta name="description" content="Kam se dá dojet veřejnou dopravou: zastávky v okolí, odkud ve zvolený den a čas něco jede." />
     <meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0b1b1a" media="(prefers-color-scheme: dark)" />
+    <script>try{var t=localStorage.getItem('theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -15,7 +16,10 @@
     <div id="app">
       <header class="bar">
         <h1><img src="icons/icon.svg" alt="" width="24" height="24" /> <span data-i18n="title"></span></h1>
-        <button id="lang" class="ghost" type="button"></button>
+        <div class="actions">
+          <button id="theme" class="ghost" type="button"></button>
+          <button id="lang" class="ghost" type="button"></button>
+        </div>
       </header>
 
       <main class="layout">

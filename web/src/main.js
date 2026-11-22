@@ -19,6 +19,38 @@ const DEFAULTS = { lat: null, lon: null, r: 3, d: null, a: [480, 660], b: null, 
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+const THEMES = ['auto', 'light', 'dark'];
+let theme = 'auto';
+try {
+  theme = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'auto';
+} catch {
+  /* soukromé okno */
+}
+
+function isDark() {
+  return theme === 'dark' || (theme === 'auto' && darkQuery.matches);
+}
+
+function applyTheme() {
+  if (theme === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  const btn = document.getElementById('theme');
+  if (btn) {
+    btn.textContent = t(`theme_${theme}`);
+    btn.title = t('themeTitle');
+  }
+}
+
+let lastMapDark = null;
+let styleFailed = false; // podklad OpenFreeMap se nenačetl -> záložní prázdný styl
+function syncMapStyle() {
+  if (!map) return;
+  const dark = isDark();
+  if (dark === lastMapDark) return;
+  lastMapDark = dark;
+  mapReady = false;
+  map.setStyle(styleFailed ? fallbackStyle() : dark ? STYLE_DARK : STYLE_LIGHT);
+}
 
 let manifest = null;
 let routes = [];
@@ -53,6 +85,7 @@ function applyI18n() {
   document.documentElement.lang = getLang();
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   $('lang').textContent = t('lang');
+  applyTheme();
   renderLegend();
   renderFoot();
 }
@@ -211,7 +244,7 @@ function circlePolygon(lat, lon, rKm, n = 96) {
 
 function setupLayers() {
   addIcons();
-  const accent = darkQuery.matches ? '#5eead4' : '#0f766e';
+  const accent = isDark() ? '#5eead4' : '#0f766e';
   map.addSource('circle', { type: 'geojson', data: emptyFc() });
   map.addSource('point', { type: 'geojson', data: emptyFc() });
   map.addSource('stops', { type: 'geojson', data: emptyFc() });
@@ -236,8 +269,8 @@ function setupLayers() {
       'text-optional': true, 'text-font': ['Noto Sans Regular'],
     },
     paint: {
-      'text-color': darkQuery.matches ? '#e5e7eb' : '#1f2937',
-      'text-halo-color': darkQuery.matches ? '#111827' : '#ffffff', 'text-halo-width': 1.5,
+      'text-color': isDark() ? '#e5e7eb' : '#1f2937',
+      'text-halo-color': isDark() ? '#111827' : '#ffffff', 'text-halo-width': 1.5,
     },
   });
   map.addLayer({
@@ -253,7 +286,7 @@ const fallbackStyle = () => ({
   version: 8,
   glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
   sources: {},
-  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': darkQuery.matches ? '#1f2937' : '#e5e7eb' } }],
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': isDark() ? '#1f2937' : '#e5e7eb' } }],
 });
 
 function initMap() {
@@ -261,7 +294,7 @@ function initMap() {
   const hasPoint = state.lat != null;
   map = new maplibregl.Map({
     container: 'map',
-    style: darkQuery.matches ? STYLE_DARK : STYLE_LIGHT,
+    style: isDark() ? STYLE_DARK : STYLE_LIGHT,
     center: hasPoint ? [state.lon, state.lat] : v.center,
     zoom: hasPoint ? zoomForRadius(state.r) : v.zoom,
     attributionControl: { compact: true },
@@ -272,7 +305,6 @@ function initMap() {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-  let styleFailed = false;
   map.on('error', (e) => {
     const msg = String(e?.error?.message || '');
     if (!mapReady && !styleFailed && /style|Failed to fetch|NetworkError|Load failed/i.test(msg)) {
@@ -299,7 +331,8 @@ function initMap() {
     const hit = map.queryRenderedFeatures(e.point, { layers: ['stops'] }).length;
     map.getCanvas().style.cursor = hit ? 'pointer' : 'crosshair';
   });
-  darkQuery.addEventListener('change', () => map.setStyle(darkQuery.matches ? STYLE_DARK : STYLE_LIGHT));
+  lastMapDark = isDark();
+  darkQuery.addEventListener('change', syncMapStyle);
 }
 
 function zoomForRadius(r) {
@@ -497,6 +530,16 @@ async function main() {
 
   $('controls').addEventListener('input', onControlsChange);
   $('controls').addEventListener('change', onControlsChange);
+  $('theme').addEventListener('click', () => {
+    theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* soukromé okno */
+    }
+    applyTheme();
+    syncMapStyle();
+  });
   $('lang').addEventListener('click', () => {
     setLang(getLang() === 'cs' ? 'en' : 'cs');
     applyI18n();
