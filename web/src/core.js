@@ -122,34 +122,43 @@ export function normWindow(w) {
   return [a, b];
 }
 
+// pole jedné události v dlaždici (docs/data-format.md)
+const EV = 9; // m, a, r, h, o, c, f, s, e
+
 /**
- * Odjezdy zastávky ve zvoleném dni a okně.
- * Odjezd s minutou m služebního dne s je v čase m + (s - D) * 1440 vůči půlnoci dne D.
- * Vrací [{t (min od půlnoci D), r, h}] seřazené podle času.
+ * Odjezdy (kind 'dep': lze nastoupit, čas odjezdu, cíl) nebo příjezdy (kind 'arr': lze vystoupit,
+ * čas příjezdu, výchozí zastávka) zastávky ve zvoleném dni a okně.
+ * Událost s minutou m služebního dne s je v čase m + (s - D) * 1440 vůči půlnoci dne D.
+ * Vrací [{t, r, h (cíl), o (výchozí), arr, dep, t0 (odjezd z výchozí), t1 (příjezd do cíle)}].
  */
-export function stopDepartures(stop, day, win, routes, modes) {
+export function stopDepartures(stop, day, win, routes, modes, kind = 'dep') {
   const out = [];
   const d = stop.deps;
-  for (let i = 0; i < d.length; i += 4) {
-    const m = d[i];
-    const r = d[i + 1];
+  const need = kind === 'arr' ? 2 : 1;
+  for (let i = 0; i < d.length; i += EV) {
+    if (!(d[i + 6] & need)) continue;
+    const r = d[i + 2];
     if (modes && !modes.has(modeGroup(routes[r][2]))) continue;
-    const mask = stop.masks[d[i + 3]];
+    const m = d[i];
+    const arr = m - d[i + 1];
+    const base = kind === 'arr' ? arr : m;
+    const mask = stop.masks[d[i + 5]];
     // služební den D + j, j = -2 … 1 (minuty GTFS mohou přesáhnout 48:00 jen výjimečně)
     for (let j = -2; j <= 1; j++) {
-      const t = m + j * DAY;
+      const t = base + j * DAY;
       if (t < win[0] || t > win[1]) continue;
-      if (runsOn(mask, day + j)) out.push({ t, r, h: stop.heads[d[i + 2]] });
+      if (!runsOn(mask, day + j)) continue;
+      const sh = j * DAY;
+      out.push({
+        t, r, h: stop.heads[d[i + 3]], o: stop.heads[d[i + 4]], kind,
+        arr: arr + sh, dep: m + sh, t0: m - d[i + 7] + sh, t1: m + d[i + 8] + sh,
+      });
     }
   }
   out.sort((x, y) => x.t - y.t || x.r - y.r);
   return out;
 }
 
-/**
- * Hlavní výpočet výběru.
- * params: {lat, lon, r (km), day, a: [od,do], b: [od,do]|null, modes: Set<'bus'|'rail'|'tram'>}
- */
 export function computeSelection(stops, routes, params) {
   const winA = normWindow(params.a);
   const winB = normWindow(params.b);
@@ -158,8 +167,8 @@ export function computeSelection(stops, routes, params) {
   for (const s of stops) {
     const dist = haversineKm(params.lat, params.lon, s.lat, s.lon);
     if (dist > params.r) continue;
-    const depsA = winA ? stopDepartures(s, params.day, winA, routes, params.modes) : [];
-    const depsB = winB ? stopDepartures(s, params.day, winB, routes, params.modes) : [];
+    const depsA = winA ? stopDepartures(s, params.day, winA, routes, params.modes, params.ak || 'dep') : [];
+    const depsB = winB ? stopDepartures(s, params.day, winB, routes, params.modes, params.bk || 'dep') : [];
     if (!depsA.length && !depsB.length) continue;
     const state = depsA.length && depsB.length ? 'ab' : depsA.length ? 'a' : 'b';
     let rail = false;
@@ -247,6 +256,8 @@ export function encodeState(st) {
   const w = (x) => `${fmtHm(x[0]).replace(':', '')}-${fmtHm(x[1]).replace(':', '')}`;
   p.set('a', st.a ? w(st.a) : 'off');
   if (st.b) p.set('b', w(st.b));
+  if (st.ak) p.set('ak', st.ak);
+  if (st.bk) p.set('bk', st.bk);
   if (st.modes && st.modes.size !== ALL_MODES.length) p.set('m', ALL_MODES.filter((m) => st.modes.has(m)).join(','));
   return p.toString();
 }
@@ -273,6 +284,7 @@ export function decodeState(hash, defaults) {
   if (p.get('a') === 'off') st.a = null;
   else if (p.has('a') && win(p.get('a'))) st.a = win(p.get('a'));
   if (p.has('b')) st.b = win(p.get('b'));
+  for (const k of ['ak', 'bk']) if (['arr', 'dep'].includes(p.get(k))) st[k] = p.get(k);
   if (p.has('m')) {
     const ms = p.get('m').split(',').filter((x) => ALL_MODES.includes(x));
     if (ms.length) st.modes = new Set(ms);

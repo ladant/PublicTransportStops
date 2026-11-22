@@ -12,11 +12,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import Config, Feed
-from .gtfs import FeedData, Interner, Stop, encode_polyline, load_feed
+from .gtfs import EVENT_LEN, FeedData, Interner, Stop, encode_polyline, load_feed
 
 log = logging.getLogger(__name__)
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 
 def dumps(obj) -> str:
@@ -93,7 +93,7 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
     routes_out: list[list] = []
     route_map: dict[tuple[str, int], int] = {}
     for feed, fd in loaded:
-        used = sorted({fd.departures[k][i + 1] for k in fd.departures for i in range(0, len(fd.departures[k]), 4)})
+        used = sorted({fd.departures[k][i + 2] for k in fd.departures for i in range(0, len(fd.departures[k]), EVENT_LEN)})
         for ri in used:
             r = fd.routes[ri]
             route_map[(feed.code, ri)] = len(routes_out)
@@ -114,13 +114,14 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
             s_out.append([k, st.name, round(st.lat, 5), round(st.lon, 5), st.modes])
             _, arr = stop_deps[k]
             rows = []
-            for i in range(0, len(arr), 4):
-                m, r, h, c = arr[i:i + 4]
-                rows.append((m, route_map[(code, r)], heads.items[h], masks.items[c]))
-            rows.sort(key=lambda t: (t[0], t[1], t[2], t[3]))
+            for i in range(0, len(arr), EVENT_LEN):
+                m, a, r, h, o, c, f, so, eo = arr[i:i + EVENT_LEN]
+                rows.append((m, route_map[(code, r)], heads.items[h], heads.items[o], masks.items[c], a, f, so, eo))
+            rows.sort()
             flat = []
-            for m, r, h, c in rows:
-                flat.extend((m, r, h_local(h), c_local(c)))
+            for m, r, h, o, c, a, f, so, eo in rows:
+                # pořadí v souboru: m, a, r, h, o, c, f, s, e (docs/data-format.md)
+                flat.extend((m, a, r, h_local(h), h_local(o), c_local(c), f, so, eo))
             d_out.append(flat)
         return dumps({"v": FORMAT_VERSION, "s": s_out, "h": h_local.items,
                       "c": [mask_b64(c, nbytes) for c in c_local.items], "d": d_out})

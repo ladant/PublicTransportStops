@@ -17,10 +17,10 @@ function loadTiles(keys) {
   return keys.flatMap((k) => parseTile(JSON.parse(readFileSync(join(out, 'tiles', `${k}.json`), 'utf8'))));
 }
 
-function select(lat, lon, r, date, a, b = null, modes = ['bus', 'rail', 'tram']) {
+function select(lat, lon, r, date, a, b = null, modes = ['bus', 'rail', 'tram'], ak = 'dep', bk = 'dep') {
   const keys = tilesForCircle(manifest, lat, lon, r);
   return computeSelection(loadTiles(keys), routes, {
-    lat, lon, r, day: dayIndex(manifest.start, date), a, b, modes: new Set(modes),
+    lat, lon, r, day: dayIndex(manifest.start, date), a, b, modes: new Set(modes), ak, bk,
   });
 }
 
@@ -113,7 +113,7 @@ test('stav v URL', () => {
 test('linky se stejným číslem a dopravcem se v seznamu slučují', () => {
   const routes = [['IC', 'A', 2, '000000', 'FFFFFF', 'SNCB', 'sncb'], ['IC', 'B', 2, '000000', 'FFFFFF', 'SNCB', 'sncb'], ['IC', 'C', 3, '000000', 'FFFFFF', 'Bus', 'bus']];
   const mask = new Uint8Array([0xff]);
-  const stop = (id, lat) => ({ id, name: id, lat, lon: 4, modes: 2, heads: ['X', 'Y'], masks: [mask], deps: [480, 0, 0, 0, 490, 1, 1, 0, 500, 2, 0, 0] });
+  const stop = (id, lat) => ({ id, name: id, lat, lon: 4, modes: 2, heads: ['X', 'Y'], masks: [mask], deps: [480, 0, 0, 0, 1, 0, 3, 0, 10, 490, 0, 1, 1, 0, 0, 3, 0, 10, 500, 0, 2, 0, 1, 0, 3, 0, 10] });
   const sel = computeSelection([stop('s1', 50), stop('s2', 50.001)], routes, { lat: 50, lon: 4, r: 1, day: 1, a: [0, 1439], b: null, modes: new Set(['bus', 'rail', 'tram']) });
   assert.equal(sel.lines.length, 2);
   const ic = sel.lines.find((l) => l.route[6] === 'sncb');
@@ -147,4 +147,24 @@ test('pipeline zapisuje trasy linek', () => {
   const ic = routes.findIndex((r) => r[0] === 'IC');
   const v = JSON.parse(readFileSync(join(out, 'lines', `${ic}.json`), 'utf8')).v;
   assert.deepEqual(decodePolyline(v[0][1]), [[50.8, 4.4], [50.9, 4.5]]);
+});
+
+
+test('příjezdy: čas příjezdu a výchozí zastávka', () => {
+  // S4 je konečná T1 (příjezd 08:30 z Centra) a T5 (07:05, 07:35 z Lesa)
+  const sel = select(50.95, 4.55, 0.2, '2026-11-23', [400, 520], null, undefined, 'arr');
+  const s4 = sel.stops.find((s) => s.id === 'mini:S4');
+  assert.deepEqual(s4.depsA.map((d) => [d.t, d.o]), [[425, 'Les'], [455, 'Les'], [510, 'Centrum']]);
+  // stejné okno jako odjezdy: z S4 v 6:40–8:40 nic neodjíždí
+  assert.equal(select(50.95, 4.55, 0.2, '2026-11-23', [400, 520]).stops.length, 0);
+  // rozbalení spoje: Centrum 08:00 -> S5 08:10 -> cíl 08:30
+  const s5 = select(50.875, 4.425, 0.2, '2026-11-23', [480, 500], null, undefined, 'arr').stops[0];
+  assert.deepEqual([s5.depsA[0].t0, s5.depsA[0].arr, s5.depsA[0].t1, s5.depsA[0].o, s5.depsA[0].h], [480, 490, 510, 'Centrum', 'Les']);
+});
+
+test('druh okna (příjezdy/odjezdy) v URL', () => {
+  const st = { lat: 50, lon: 4, r: 3, d: '2026-11-24', a: [480, 660], b: [900, 1140], ak: 'arr', bk: 'dep', modes: new Set(['bus', 'rail', 'tram']) };
+  const back = decodeState(`#${encodeState(st)}`, { r: 3, a: [0, 1], b: null, ak: 'dep', bk: 'dep', modes: ['bus', 'rail', 'tram'] });
+  assert.equal(back.ak, 'arr');
+  assert.equal(back.bk, 'dep');
 });

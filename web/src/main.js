@@ -15,7 +15,8 @@ const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/liberty';
 const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
 const COLORS = { a: '#2563eb', b: '#ea580c', ab: '#15803d' };
 const MAX_DEPS = 40;
-const DEFAULTS = { lat: null, lon: null, r: 3, d: null, a: [480, 660], b: null, modes: ['bus', 'rail', 'tram'] };
+const DEFAULTS = { lat: null, lon: null, r: 3, d: null, a: [480, 660], b: null, ak: 'arr', bk: 'dep', modes: ['bus', 'rail', 'tram'] };
+const KIND_ICON = { arr: '↘', dep: '↗' };
 
 const $ = (id) => document.getElementById(id);
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -94,6 +95,7 @@ function applyI18n() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   $('lang').textContent = t('lang');
   applyTheme();
+  if (state) renderKinds();
   renderSummary();
   $('tramChip').title = t('tramTitle');
   $('locate').title = t('myLocation');
@@ -175,6 +177,7 @@ function writeControls() {
     $('a1').value = fmtHm(state.a[0]);
     $('a2').value = fmtHm(state.a[1]);
   }
+  renderKinds();
   $('useB').checked = !!state.b;
   if (state.b) {
     $('b1').value = fmtHm(state.b[0]);
@@ -190,11 +193,30 @@ function saveState() {
   history.replaceState(null, '', `#${encodeState(state)}`);
 }
 
+function renderKinds() {
+  for (const w of ['a', 'b']) {
+    const btn = $(w === 'a' ? 'kindA' : 'kindB');
+    const k = state[`${w}k`];
+    btn.textContent = `${KIND_ICON[k]} ${t(`kind_${k}`)}`;
+    btn.title = t('kindTitle');
+    btn.dataset.kind = k;
+  }
+}
+
+function toggleKind(w) {
+  state[`${w}k`] = state[`${w}k`] === 'arr' ? 'dep' : 'arr';
+  renderKinds();
+  saveState();
+  renderSummary();
+  renderLegend();
+  recompute();
+}
+
 function renderSummary() {
   if (!state) return;
   const day = fmtDate(state.d, { weekday: 'short', day: 'numeric', month: 'numeric' });
   const wins = [[state.a, 'a'], [state.b, 'b']].filter(([w]) => w)
-    .map(([w, c]) => `<span class="w"><i class="dot ${c}"></i>${winShort(w)}</span>`).join('');
+    .map(([w, c]) => `<span class="w"><i class="dot ${c}"></i>${KIND_ICON[state[`${c}k`]]}${winShort(w)}</span>`).join('');
   const modes = state.modes.size === 3 ? '' : ` · ${['bus', 'rail', 'tram'].filter((m) => state.modes.has(m)).map((m) => t(m)).join(', ') || '–'}`;
   $('ctlSummary').innerHTML = collapsed ? `<b>${esc(day)}</b>${wins}<span class="m">${esc(modes)}</span>` : '';
   $('ctlAction').textContent = collapsed ? `${t('edit')} ▾` : `${t('collapse')} ▴`;
@@ -531,7 +553,7 @@ async function recompute() {
   if (seq !== computeSeq) return;
   const params = {
     lat: state.lat, lon: state.lon, r: state.r,
-    day: dayIndex(manifest.start, state.d), a: state.a, b: state.b, modes: state.modes,
+    day: dayIndex(manifest.start, state.d), a: state.a, b: state.b, ak: state.ak, bk: state.bk, modes: state.modes,
   };
   selection = computeSelection(tiles.flat(), routes, params);
   if (highlight != null && !selection.lines.some((l) => l.k === highlight)) highlight = null;
@@ -557,12 +579,17 @@ function hideNotice() {
   $('notice').hidden = true;
 }
 
-function depRows(list) {
+const dayMark = (m) => (m >= 1440 ? '<sup>+1</sup>' : m < 0 ? '<sup>−1</sup>' : '');
+
+function depRows(list, stop) {
   if (!list.length) return `<p class="muted">${t('none')}</p>`;
   const rows = list.slice(0, MAX_DEPS).map((d) => {
     const r = routes[d.r];
-    const plus = d.t >= 1440 ? '<sup>+1</sup>' : '';
-    return `<li><time>${fmtHm(d.t)}${plus}</time>${badge(r)}<span class="head">${esc(d.h)}</span><span class="ag">${esc(r[5])}</span></li>`;
+    // příjezd: odkud spoj jede; odjezd: kam jede
+    const label = d.kind === 'arr' ? `${t('from')} ${d.o}` : d.h;
+    const here = d.arr === d.dep ? `${fmtHm(d.arr)}${dayMark(d.arr)}` : `${fmtHm(d.arr)}–${fmtHm(d.dep)}${dayMark(d.dep)}`;
+    return `<li><details><summary title="${esc(t('tripTitle'))}"><time>${fmtHm(d.t)}${dayMark(d.t)}</time>${badge(r)}<span class="head">${esc(label)}</span><span class="ag">${esc(r[5])}</span></summary>
+      <p class="trip"><span>${esc(d.o)} <time>${fmtHm(d.t0)}${dayMark(d.t0)}</time></span><span class="arrow">→</span><b>${esc(stop.name)} <time>${here}</time></b><span class="arrow">→</span><span>${esc(d.h)} <time>${fmtHm(d.t1)}${dayMark(d.t1)}</time></span></p></details></li>`;
   });
   if (list.length > MAX_DEPS) rows.push(`<li class="muted">${t('more', list.length - MAX_DEPS)}</li>`);
   return `<ul class="deps">${rows.join('')}</ul>`;
@@ -617,17 +644,18 @@ function renderStopCard() {
     return;
   }
   const feed = feedOf(s.id);
-  const stateLabel = s.state === 'ab' ? t('runsBoth') : t('runsIn', winShort(s.state === 'a' ? state.a : state.b));
-  const section = (w, cls, list) => (w
-    ? `<h4><i class="dot ${cls}"></i>${t('depsIn')} ${winLabel(w)}</h4>${depRows(list)}` : '');
+  const inLabel = (w) => t(state[`${w}k`] === 'arr' ? 'inArr' : 'inDep', winShort(state[w]));
+  const stateLabel = s.state === 'ab' ? t('runsBoth') : inLabel(s.state);
+  const section = (w, cls, list) => (state[w]
+    ? `<h4><i class="dot ${cls}"></i>${KIND_ICON[state[`${w}k`]]} ${t(`kind_${state[`${w}k`]}`)} ${winLabel(state[w])}</h4>${depRows(list, s)}` : '');
   card.innerHTML = `
     <header>
       <h3>${esc(s.name)}</h3>
       <button type="button" class="x" aria-label="${esc(t('close'))}">×</button>
     </header>
     <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)} · ${esc(t('away', fmtKm(s.dist)))}</p>
-    ${section(state.a, 'a', s.depsA)}
-    ${section(state.b, 'b', s.depsB)}
+    ${section('a', 'a', s.depsA)}
+    ${section('b', 'b', s.depsB)}
     <p class="links">
       <a href="${esc(walkUrl(state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
       ${feed?.alerts ? `<a href="${esc(feed.alerts)}" target="_blank" rel="noopener">${t('alerts')} (${esc(feed.name)})</a>` : ''}
@@ -647,8 +675,8 @@ function renderLines() {
   ul.innerHTML = selection.lines.map((l) => {
     const stops = [...l.stops.values()];
     const heads = [...l.heads];
-    const cnt = (w, cls, n) => (w ? `<span class="cnt ${cls}" title="${esc(`${t('depsIn')} ${winLabel(w)}`)}">${n}</span>` : '');
-    const counts = cnt(state.a, 'a', l.nA) + cnt(state.b, 'b', l.nB);
+    const cnt = (w, n) => (state[w] ? `<span class="cnt ${w}" title="${esc(`${t(`kind_${state[`${w}k`]}`)} ${winLabel(state[w])}`)}">${n}</span>` : '');
+    const counts = cnt('a', l.nA) + cnt('b', l.nB);
     return `<li><button type="button" class="line${l.k === highlight ? ' on' : ''}" data-k="${esc(l.k)}" aria-pressed="${l.k === highlight}">
       <span class="top">${badge(l.route)}<span class="ag">${esc(l.route[5])}</span>${counts}</span>
       <span class="sub"><b>${t('dirs')}:</b> ${esc(heads.slice(0, 4).join(' · '))}${heads.length > 4 ? ' …' : ''}</span>
@@ -661,7 +689,7 @@ function renderLegend() {
   const item = (st, label) => `<span><i class="dot ${st}"></i>${esc(label)}</span>`;
   const a = !state || state.a;
   const b = state && state.b;
-  $('legend').innerHTML = (a ? item('a', state ? winShort(state.a) : t('winA')) : '') + (b ? item('b', winShort(state.b)) : '')
+  $('legend').innerHTML = (a ? item('a', state ? `${KIND_ICON[state.ak]}${winShort(state.a)}` : t('winA')) : '') + (b ? item('b', `${KIND_ICON[state.bk]}${winShort(state.b)}`) : '')
     + (a && b ? item('ab', t('both')) : '') + `<span><i class="sq"></i>${esc(t('legendRail'))}</span>`;
 }
 
@@ -697,6 +725,8 @@ async function main() {
   initMap();
 
   $('ctlToggle').addEventListener('click', () => setCollapsed(!collapsed));
+  $('kindA').addEventListener('click', () => toggleKind('a'));
+  $('kindB').addEventListener('click', () => toggleKind('b'));
   setCollapsed(collapsed);
   $('controls').addEventListener('input', onControlsChange);
   $('controls').addEventListener('change', onControlsChange);

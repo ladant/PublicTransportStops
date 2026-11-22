@@ -47,9 +47,10 @@ def load_all(out: Path, manifest):
             assert s[0] not in stops, f"zastávka {s[0]} je ve více dlaždicích"
             deps = []
             d = t["d"][i]
-            for j in range(0, len(d), 4):
-                m, r, h, c = d[j:j + 4]
-                deps.append((m, routes[r][0], t["h"][h], base64.b64decode(t["c"][c])))
+            for j in range(0, len(d), 9):
+                m, a, r, h, o, c, f, so, eo = d[j:j + 9]
+                deps.append({"m": m, "a": a, "r": routes[r][0], "h": t["h"][h], "o": t["h"][o],
+                             "mask": base64.b64decode(t["c"][c]), "f": f, "s": so, "e": eo})
             stops[s[0]] = {"tile": key, "name": s[1], "lat": s[2], "lon": s[3], "modes": s[4], "deps": deps}
     return stops, routes
 
@@ -58,16 +59,31 @@ def runs_on(mask: bytes, day: int) -> bool:
     return day >= 0 and (day >> 3) < len(mask) and bool(mask[day >> 3] & (1 << (day & 7)))
 
 
-def departures_on(stop, manifest, d: date, a: int = 0, b: int = 1440):
-    """Stejná logika jako klient (web/src/core.js)."""
+def events_on(stop, manifest, d: date, a: int = 0, b: int = 1440, arrivals: bool = False):
+    """Stejná logika jako klient (web/src/core.js): odjezdy (cíl) nebo příjezdy (výchozí zastávka)."""
     day = (d - date.fromisoformat(manifest["start"])).days
     out = []
-    for m, r, h, mask in stop["deps"]:
+    for ev in stop["deps"]:
+        if not ev["f"] & (2 if arrivals else 1):
+            continue
+        m = ev["m"] - ev["a"] if arrivals else ev["m"]
         k = m // 1440
         t = m - 1440 * k
-        if runs_on(mask, day - k) and a <= t <= b:
-            out.append((t, r, h))
+        if runs_on(ev["mask"], day - k) and a <= t <= b:
+            out.append((t, ev["r"], ev["o"] if arrivals else ev["h"]))
     return sorted(out)
+
+
+def departures_on(stop, manifest, d: date, a: int = 0, b: int = 1440):
+    return events_on(stop, manifest, d, a, b)
+
+
+def arrivals_on(stop, manifest, d: date, a: int = 0, b: int = 1440):
+    return events_on(stop, manifest, d, a, b, arrivals=True)
+
+
+def boarding(stop):
+    return [ev for ev in stop["deps"] if ev["f"] & 1]
 
 
 def test_parse_time():
@@ -97,17 +113,17 @@ def test_no_boarding_departures_skipped(built):
     _, out, m = built
     stops, _ = load_all(out, m)
     # S3: T2 má pickup_type=1, T3 a T4 tam končí; zůstává T1 a dva spoje T5 z frequencies
-    times = sorted((d[0], d[1]) for d in stops["mini:S3"]["deps"])
+    times = sorted((d["m"], d["r"]) for d in boarding(stops["mini:S3"]))
     assert times == [(420, "101"), (450, "101"), (500, "12")]
     # S4 = konečná T1 a T5, zůstane jen odjezd T2
-    assert [d[0] for d in stops["mini:S4"]["deps"]] == [540]
+    assert [d["m"] for d in boarding(stops["mini:S4"])] == [540]
 
 
 def test_headsign_default_and_interpolation(built):
     _, out, m = built
     stops, _ = load_all(out, m)
-    assert stops["mini:S1b"]["deps"][0][2] == "Centrum"   # trip bez headsign -> poslední zastávka
-    assert stops["mini:S5"]["deps"][0][0] == 490          # 08:10 dopočítáno mezi 08:00 a 08:20
+    assert boarding(stops["mini:S1b"])[0]["h"] == "Centrum"   # trip bez headsign -> poslední zastávka
+    assert boarding(stops["mini:S5"])[0]["m"] == 490          # 08:10 dopočítáno mezi 08:00 a 08:20
 
 
 def test_calendar_and_exceptions(built):
@@ -130,7 +146,9 @@ def test_calendar_dates_only_feed(built):
     x = stops["cdonly:X"]
     assert departures_on(x, m, date(2026, 11, 23)) == [(720, "7", "Mesto")]
     assert departures_on(x, m, date(2026, 11, 24)) == []
-    assert "cdonly:Y" not in stops  # jen konečná, žádný odjezd
+    # Y je jen konečná: žádný odjezd, ale příjezd z Ves
+    assert departures_on(stops["cdonly:Y"], m, date(2026, 11, 23)) == []
+    assert arrivals_on(stops["cdonly:Y"], m, date(2026, 11, 23)) == [(730, "7", "Ves")]
 
 
 def test_after_midnight(built):
@@ -174,7 +192,7 @@ def test_tile_split(tmp_path):
     m = build(cfg, [(cfg.feeds[0], mini, None)], tmp_path / "d", TODAY)
     assert any(k.count("_") > 1 for k in m["tiles"])
     stops, _ = load_all(tmp_path / "d", m)
-    assert len(stops) == 6  # S1, S1b, STA, S3, S4, S5
+    assert len(stops) == 6  # S1, S1b, STA, S3, S4, S5 (všechny mají odjezd i příjezd)
 
 
 def test_broken_feed_falls_back_to_previous(tmp_path):
@@ -269,3 +287,24 @@ def test_line_shapes(built):
     vic = json.loads((out / "lines" / f"{idx['IC']}.json").read_text())["v"]
     assert [decode_polyline(enc) for _, enc in vic] == [[(50.8, 4.4), (50.9, 4.5)]]
     assert all(n >= 1 for n, _ in v12 + vic)
+
+
+def test_arrivals(built):
+    _, out, m = built
+    stops, _ = load_all(out, m)
+    mon = date(2026, 11, 23)
+    # S4: konečná T1 (08:30 z Centra) a T5 (07:05, 07:35 z Lesa); T2 tu začíná -> žádný příjezd
+    assert arrivals_on(stops["mini:S4"], m, mon) == [(425, "101", "Les"), (455, "101", "Les"), (510, "12", "Centrum")]
+    # S3: T2 má pickup_type=1 -> jen výstup (příjezd), ne odjezd
+    assert (550, "12", "Konecna") in arrivals_on(stops["mini:S3"], m, mon)
+    assert all(t != 550 for t, *_ in departures_on(stops["mini:S3"], m, mon))
+    # S1 je výchozí zastávka T1 -> odjezd, ne příjezd
+    assert all(r != "12" or t != 480 for t, r, _ in arrivals_on(stops["mini:S1"], m, mon))
+
+
+def test_trip_ends(built):
+    _, out, m = built
+    stops, _ = load_all(out, m)
+    # T1 08:00 Centrum -> S5 08:10 -> Les 08:20 -> Konecna 08:30: na S5 je 10 min od výchozí a 20 do cíle
+    ev = [e for e in stops["mini:S5"]["deps"] if e["r"] == "12"][0]
+    assert (ev["m"], ev["a"], ev["o"], ev["h"], ev["s"], ev["e"], ev["f"]) == (490, 0, "Centrum", "Les", 10, 20, 3)
