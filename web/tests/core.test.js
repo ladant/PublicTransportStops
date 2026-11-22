@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   cell, computeSelection, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange,
-  decodePolyline, normWindow, parseTile, passesCircle, tileBbox, tilesForCircle,
+  decodePolyline, normWindow, parseTile, passesBbox, passesCircle, tileBbox, tilesForBbox, tilesForCircle,
 } from '../src/core.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -167,4 +167,20 @@ test('druh okna (příjezdy/odjezdy) v URL', () => {
   const back = decodeState(`#${encodeState(st)}`, { r: 3, a: [0, 1], b: null, ak: 'dep', bk: 'dep', modes: ['bus', 'rail', 'tram'] });
   assert.equal(back.ak, 'arr');
   assert.equal(back.bk, 'dep');
+});
+
+test('výřez mapy místo okruhu', () => {
+  const bbox = [50.84, 4.34, 50.86, 4.36];
+  const keys = tilesForBbox(manifest, bbox);
+  const sel = computeSelection(loadTiles(keys), routes, {
+    lat: 50.85, lon: 4.35, r: 0, bbox, day: dayIndex(manifest.start, '2026-11-23'), a: [0, 1439], b: null, modes: new Set(['bus', 'rail', 'tram']),
+  });
+  assert.deepEqual(sel.stops.map((s) => s.id).sort(), ['mini:S1', 'mini:S1b']);
+  assert.equal(passesBbox([[50.85, 4.35]], bbox), true);
+  assert.equal(passesBbox([[51, 5]], bbox), false);
+  const st = { lat: 50.85, lon: 4.35, r: 3, d: '2026-11-24', a: [480, 660], b: null, area: 'v', z: 13.5, modes: new Set(['bus', 'rail', 'tram']) };
+  const back = decodeState(`#${encodeState(st)}`, { r: 3, a: [0, 1], b: null, modes: ['bus', 'rail', 'tram'] });
+  assert.equal(back.area, 'v');
+  assert.equal(back.z, 13.5);
+  assert.equal(decodeState('#lat=50&lon=4', { r: 3, a: [0, 1], b: null, modes: ['bus'] }).area, 'c');
 });

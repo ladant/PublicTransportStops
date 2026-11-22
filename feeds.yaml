@@ -9,7 +9,7 @@
 
 timezone: Europe/Brussels
 build_hour: 17          # místní hodina, kdy se má denní sestavení spustit (viz workflow)
-days: 10                # na kolik dní dopředu se předpočítává kalendář (víc = větší dlaždice)
+days: 14                # na kolik dní dopředu se předpočítává kalendář (víc = větší dlaždice)
 grid:
   dlat: 0.1             # výška dlaždice ve stupních šířky
   dlon: 0.15            # šířka dlaždice ve stupních délky
