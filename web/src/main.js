@@ -757,7 +757,10 @@ async function main() {
     const moved = next.lat !== state.lat || next.lon !== state.lon;
     state = next;
     state.d = clampDate(state.d);
-    if (moved) clearStop();
+    if (moved) {
+      clearStop();
+      highlight = null;
+    }
     renderLegend();
     renderSummary();
     writeControls();
