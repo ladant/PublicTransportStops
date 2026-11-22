@@ -97,6 +97,19 @@ button { font: inherit; color: inherit; }
 .chip:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .wins { display: flex; flex-direction: column; gap: 4px; }
+
+/* sbalení nastavení: na mobilu zůstane jen řádek se shrnutím */
+.ctl-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 0 2px;
+  background: none; border: 0; font-size: 13px; color: var(--muted); cursor: pointer; text-align: left;
+}
+.ctl-toggle .summary { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; color: var(--text); overflow: hidden; white-space: nowrap; }
+.ctl-toggle .summary .w { display: inline-flex; align-items: center; gap: 4px; }
+.ctl-toggle .summary .m { color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.ctl-toggle .act { flex: none; color: var(--accent); font-weight: 600; }
+.controls.collapsed { gap: 0; padding-top: 3px; padding-bottom: 3px; }
+.controls.collapsed .row, .controls.collapsed .wins { display: none; }
+.controls:not(.collapsed) .ctl-toggle { justify-content: flex-end; min-height: 24px; margin: -2px 0 -4px; }
 /* okno na jednom řádku: ☑ ● 1. čas  [08:00] – [11:00] */
 .win {
   display: flex; align-items: center; gap: 6px;
@@ -115,6 +128,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- mapa */
 .mapwrap { position: relative; height: 52dvh; min-height: 300px; }
+.ctl-collapsed .mapwrap { height: 66dvh; }
 #map { position: absolute; inset: 0; }
 .maplibregl-canvas { cursor: crosshair; }
 .fab {
@@ -214,6 +228,11 @@ button { font: inherit; color: inherit; }
     grid-template-areas: "controls map" "below map";
   }
   .controls { grid-area: controls; border-right: 1px solid var(--line); }
+  /* na desktopu je místa dost: vždy rozbaleno */
+  .ctl-toggle { display: none; }
+  .controls.collapsed .row, .controls.collapsed .wins { display: flex; }
+  .controls.collapsed { gap: 6px; padding: 6px 10px; }
+  .ctl-collapsed .mapwrap { height: auto; }
   .mapwrap { grid-area: map; height: auto; min-height: 0; }
   .below { grid-area: below; overflow-y: auto; border-right: 1px solid var(--line); }
   .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { display: block; }

@@ -62,6 +62,12 @@ let highlight = null; // klíč linky (l.k)
 let popup = null; // malý štítek vybrané zastávky na mapě
 let selectedId = null; // vybraná zastávka (detail pod mapou)
 const desktopQuery = window.matchMedia('(min-width: 900px)');
+let collapsed = false; // sbalené nastavení nad mapou (jen mobil)
+try {
+  collapsed = localStorage.getItem('ctlCollapsed') === '1';
+} catch {
+  /* soukromé okno */
+}
 let computeSeq = 0;
 const tileCache = new Map();
 
@@ -88,6 +94,7 @@ function applyI18n() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   $('lang').textContent = t('lang');
   applyTheme();
+  renderSummary();
   $('tramChip').title = t('tramTitle');
   $('locate').title = t('myLocation');
   $('locate').setAttribute('aria-label', t('myLocation'));
@@ -183,9 +190,35 @@ function saveState() {
   history.replaceState(null, '', `#${encodeState(state)}`);
 }
 
+function renderSummary() {
+  if (!state) return;
+  const day = fmtDate(state.d, { weekday: 'short', day: 'numeric', month: 'numeric' });
+  const wins = [[state.a, 'a'], [state.b, 'b']].filter(([w]) => w)
+    .map(([w, c]) => `<span class="w"><i class="dot ${c}"></i>${winShort(w)}</span>`).join('');
+  const modes = state.modes.size === 3 ? '' : ` · ${['bus', 'rail', 'tram'].filter((m) => state.modes.has(m)).map((m) => t(m)).join(', ') || '–'}`;
+  $('ctlSummary').innerHTML = collapsed ? `<b>${esc(day)}</b>${wins}<span class="m">${esc(modes)}</span>` : '';
+  $('ctlAction').textContent = collapsed ? `${t('edit')} ▾` : `${t('collapse')} ▴`;
+}
+
+function setCollapsed(v) {
+  collapsed = v;
+  try {
+    localStorage.setItem('ctlCollapsed', v ? '1' : '0');
+  } catch {
+    /* soukromé okno */
+  }
+  $('controls').classList.toggle('collapsed', v);
+  $('ctlToggle').setAttribute('aria-expanded', String(!v));
+  document.body.classList.toggle('ctl-collapsed', v);
+  renderSummary();
+  // mapa změnila velikost
+  if (map) requestAnimationFrame(() => map.resize());
+}
+
 function onControlsChange() {
   readControls();
   markWindows();
+  renderSummary();
   renderLegend();
   $('rOut').textContent = fmtKm(state.r);
   saveState();
@@ -604,6 +637,8 @@ async function main() {
   applyI18n();
   initMap();
 
+  $('ctlToggle').addEventListener('click', () => setCollapsed(!collapsed));
+  setCollapsed(collapsed);
   $('controls').addEventListener('input', onControlsChange);
   $('controls').addEventListener('change', onControlsChange);
   $('radius').addEventListener('input', onControlsChange);
@@ -666,6 +701,7 @@ async function main() {
     state.d = clampDate(state.d);
     if (moved) clearStop();
     renderLegend();
+    renderSummary();
     writeControls();
     drawCircle();
     if (moved && state.lat != null) map.flyTo({ center: [state.lon, state.lat], zoom: zoomForRadius(state.r) });
