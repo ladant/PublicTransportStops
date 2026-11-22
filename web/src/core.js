@@ -173,10 +173,11 @@ export function computeSelection(stops, routes, params) {
         const k = `${rt[6]}|${rt[2]}|${rt[0]}`;
         let l = lines.get(k);
         if (!l) {
-          l = { k, r: x.r, route: rt, nA: 0, nB: 0, heads: new Set(), stops: new Map() };
+          l = { k, r: x.r, rs: new Set(), route: rt, nA: 0, nB: 0, heads: new Set(), stops: new Map() };
           lines.set(k, l);
         }
         l[key]++;
+        l.rs.add(x.r);
         if (x.h) l.heads.add(x.h);
         l.stops.set(s.id, s.name);
       }
@@ -200,6 +201,35 @@ function compareLines(a, b) {
 /** Dopravci (feedy), pro které zvolený den leží mimo platnost dat. */
 export function feedsOutOfRange(manifest, dateIso) {
   return manifest.feeds.filter((f) => (f.from && dateIso < f.from) || (f.to && dateIso > f.to));
+}
+
+// ---- trasy linek
+
+/** Google encoded polyline (přesnost 1e-5) -> [[lat, lon], ...] */
+export function decodePolyline(s) {
+  const pts = [];
+  let i = 0, lat = 0, lon = 0;
+  while (i < s.length) {
+    const v = [0, 0];
+    for (let k = 0; k < 2; k++) {
+      let shift = 0, res = 0, b;
+      do {
+        b = s.charCodeAt(i++) - 63;
+        res |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      v[k] = res & 1 ? ~(res >> 1) : res >> 1;
+    }
+    lat += v[0];
+    lon += v[1];
+    pts.push([lat / 1e5, lon / 1e5]);
+  }
+  return pts;
+}
+
+/** Varianta trasy vede přes okruh (aspoň jeden bod uvnitř). */
+export function passesCircle(pts, lat, lon, rKm) {
+  return pts.some(([a, b]) => haversineKm(lat, lon, a, b) <= rKm);
 }
 
 // ---- stav v URL (#lat=…&lon=…&r=…&d=…&a=0800-1100&b=…&m=bus,rail)

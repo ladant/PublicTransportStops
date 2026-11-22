@@ -3,7 +3,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import {
-  computeSelection, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange, fmtHm,
+  computeSelection, dateRange, decodePolyline, passesCircle, dayIndex, decodeState, encodeState, feedsOutOfRange, fmtHm,
   parseHm, parseTile, tilesForCircle,
 } from './core.js';
 import { fmtDate, fmtKm, getLang, setLang, t } from './i18n.js';
@@ -301,6 +301,17 @@ function setupLayers() {
   map.addSource('stops', { type: 'geojson', data: emptyFc() });
   map.addLayer({ id: 'circle-fill', type: 'fill', source: 'circle', paint: { 'fill-color': accent, 'fill-opacity': 0.07 } });
   map.addLayer({ id: 'circle-line', type: 'line', source: 'circle', paint: { 'line-color': accent, 'line-width': 2, 'line-dasharray': [2, 1.5] } });
+  map.addSource('route', { type: 'geojson', data: emptyFc() });
+  map.addLayer({
+    id: 'route-casing', type: 'line', source: 'route',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': isDark() ? '#0b1220' : '#ffffff', 'line-width': 8, 'line-opacity': 0.9 },
+  });
+  map.addLayer({
+    id: 'route-line', type: 'line', source: 'route',
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-width': 4.5 },
+  });
   map.addLayer({
     id: 'stops', type: 'symbol', source: 'stops',
     layout: {
@@ -414,9 +425,56 @@ function setPoint(lat, lon, fly = false) {
   recompute();
 }
 
+// ---------- trasa zvýrazněné linky
+
+const lineCache = new Map();
+let routeSeq = 0;
+
+function loadLine(gi) {
+  let p = lineCache.get(gi);
+  if (!p) {
+    p = fetch(`${DATA}lines/${gi}.json?b=${manifest.build}`)
+      .then((r) => (r.ok ? r.json() : { v: [] }))
+      .then((j) => j.v.map(([n, enc]) => ({ n, pts: decodePolyline(enc) })))
+      .catch(() => {
+        lineCache.delete(gi);
+        return [];
+      });
+    lineCache.set(gi, p);
+  }
+  return p;
+}
+
+async function drawRoute() {
+  const seq = ++routeSeq;
+  if (!mapReady) return;
+  const l = highlight != null && selection?.lines.find((x) => x.k === highlight);
+  if (!l || !manifest.lines) {
+    map.getSource('route').setData(emptyFc());
+    return;
+  }
+  const gis = [...l.rs];
+  const all = await Promise.all(gis.map(loadLine));
+  if (seq !== routeSeq || !mapReady) return;
+  const features = [];
+  gis.forEach((gi, i) => {
+    for (const v of all[i]) {
+      // jen varianty, které vedou přes zvolený okruh
+      if (!passesCircle(v.pts, state.lat, state.lon, state.r * 1.05)) continue;
+      features.push({
+        type: 'Feature',
+        properties: { color: `#${routes[gi][3]}` },
+        geometry: { type: 'LineString', coordinates: v.pts.map(([a, b]) => [b, a]) },
+      });
+    }
+  });
+  map.getSource('route').setData({ type: 'FeatureCollection', features });
+}
+
 function renderStops() {
   if (!mapReady) return;
   const src = map.getSource('stops');
+  drawRoute();
   if (!selection) {
     src.setData(emptyFc());
     return;

@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import Config, Feed
-from .gtfs import FeedData, Interner, Stop, load_feed
+from .gtfs import FeedData, Interner, Stop, encode_polyline, load_feed
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +157,20 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
     for key in sorted(base, key=lambda k: tuple(int(p) for p in k.split("_"))):
         emit(key, base[key], 0)
 
+    # trasy linek: lines/{index linky}.json, načítá se až po klepnutí na linku
+    lines_dir = out_dir / "lines"
+    lines_dir.mkdir()
+    line_bytes = 0
+    for feed, fd in loaded:
+        for ri, variants in fd.lines.items():
+            gi = route_map.get((feed.code, ri))
+            if gi is None:
+                continue
+            text = dumps({"v": [[n, encode_polyline(pts)] for n, pts in variants]})
+            (lines_dir / f"{gi}.json").write_text(text, encoding="utf-8")
+            line_bytes += gz_size(text)
+            digest.update(f"L{gi}".encode() + b"\0" + text.encode("utf-8"))
+
     routes_text = dumps(routes_out)
     (out_dir / "routes.json").write_text(routes_text, encoding="utf-8")
     digest.update(routes_text.encode("utf-8"))
@@ -179,6 +193,7 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
         "view": cfg.default_view,
         "feeds": feeds_out,
         "tiles": sorted(written, key=lambda k: tuple(int(p) for p in k.split("_"))),
+        "lines": True,
     }
     digest.update(dumps(content).encode("utf-8"))
     manifest = dict(content)
@@ -188,6 +203,7 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
 
     sizes = sorted(written.values())
     biggest = max(written, key=written.get)
-    log.info("dlaždic: %d, celkem %.1f MB gzip, největší %s (%d kB), zastávek %d, linek %d",
-             len(written), sum(sizes) / 1e6, biggest, written[biggest] // 1000, len(all_stops), len(routes_out))
+    log.info("dlaždic: %d, celkem %.1f MB gzip, největší %s (%d kB), zastávek %d, linek %d, trasy linek %.1f MB gzip",
+             len(written), sum(sizes) / 1e6, biggest, written[biggest] // 1000, len(all_stops), len(routes_out),
+             line_bytes / 1e6)
     return manifest

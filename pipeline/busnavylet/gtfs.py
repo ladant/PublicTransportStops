@@ -176,6 +176,8 @@ class FeedData:
     valid_from: date | None = None
     valid_to: date | None = None
     trips_used: int = 0
+    # trasy linek: lokální index linky -> [(počet spojů, [(lat, lon), ...]), ...]
+    lines: dict[int, list[tuple[int, list[tuple[float, float]]]]] = field(default_factory=dict)
 
 
 class Interner:
@@ -331,13 +333,13 @@ def load_feed(code: str, path, start: date, ndays: int,
     fd.valid_from, fd.valid_to = vmin, vmax
 
     # --- spoje
-    trips: dict[str, tuple[int, int, str]] = {}
+    trips: dict[str, tuple[int, int, str, str]] = {}
     for r in g.rows("trips.txt"):
         tid, rid, sid = r.get("trip_id", ""), r.get("route_id", ""), r.get("service_id", "")
         m = smasks.get(sid, 0)
         if not tid or rid not in route_idx or m == 0:
             continue
-        trips[tid] = (route_idx[rid], m, r.get("trip_headsign", ""))
+        trips[tid] = (route_idx[rid], m, r.get("trip_headsign", ""), r.get("shape_id", ""))
 
     freqs: dict[str, list[tuple[int, int, int]]] = {}
     for r in g.rows("frequencies.txt"):
@@ -378,12 +380,14 @@ def load_feed(code: str, path, start: date, ndays: int,
             stop_heads[(tid, q)] = sh
 
     deps: dict[str, list[tuple[int, int, int, int]]] = {}
+    # varianty tras: (linka, ('s', shape_id) | ('q', posloupnost stanic)) -> počet spojů
+    variants: dict[tuple[int, tuple], int] = {}
     for tid in sorted(per_trip):
         buf = per_trip[tid]
         rows = sorted((tuple(buf[i:i + 5]) for i in range(0, len(buf), 5)), key=lambda t: t[0])
         if len(rows) < 2:
             continue
-        ridx, mask, head = trips[tid]
+        ridx, mask, head, shape_id = trips[tid]
         mode = fd.routes[ridx].mode
         seqs = [r[0] for r in rows]
         dtimes = _interpolate([None if r[3] < 0 else r[3] for r in rows], seqs)
@@ -401,6 +405,16 @@ def load_feed(code: str, path, start: date, ndays: int,
                     offsets.append(t // 60 - first)
                     t += hw
         fd.trips_used += len(offsets)
+        if shape_id:
+            vkey = ("s", shape_id)
+        else:  # bez shapes.txt (např. SNCB): stanice spojené rovnou čarou
+            seq_g = []
+            for r in rows:
+                gid = group_of.get(stop_ref.items[r[1]])
+                if gid is not None and (not seq_g or seq_g[-1] != gid):
+                    seq_g.append(gid)
+            vkey = ("q", tuple(seq_g))
+        variants[(ridx, vkey)] = variants.get((ridx, vkey), 0) + len(offsets)
         prev_gid = None
         for i, r in enumerate(rows[:-1]):  # poslední zastávka: jen výstup
             sid = stop_ref.items[r[1]]
@@ -428,9 +442,97 @@ def load_feed(code: str, path, start: date, ndays: int,
         for t in uniq:
             a.extend(t)
         fd.departures[key] = a
+    fd.lines = _line_shapes(g, code, variants, fd.stops)
     # zastávky bez odjezdů se do dlaždic nedávají
     fd.stops = {k: v for k, v in fd.stops.items() if k in fd.departures}
     return fd
+
+
+SIMPLIFY_DEG = 0.00008  # ~8 m: tolerance zjednodušení tras
+
+
+def _line_shapes(g: GtfsZip, code: str, variants: dict, stops: dict[str, Stop]) -> dict:
+    """Polyline každé varianty trasy (shapes.txt, jinak spojnice stanic), zjednodušené."""
+    need = {v[1] for (_, v) in variants if v[0] == "s"}
+    raw: dict[str, array] = {}
+    if need:
+        cols = ["shape_id", "shape_pt_sequence", "shape_pt_lat", "shape_pt_lon"]
+        for sh, seq, lat, lon in g.raw_rows("shapes.txt", cols):
+            if sh not in need:
+                continue
+            try:
+                t = (float(seq), float(lat), float(lon))
+            except ValueError:
+                continue
+            buf = raw.get(sh)
+            if buf is None:
+                buf = raw[sh] = array("d")
+            buf.extend(t)
+    pts_s: dict[str, list[tuple[float, float]]] = {}
+    for sh, buf in raw.items():
+        pts = sorted((buf[i], buf[i + 1], buf[i + 2]) for i in range(0, len(buf), 3))
+        pts_s[sh] = simplify([(la, lo) for _, la, lo in pts], SIMPLIFY_DEG)
+    raw.clear()
+    out: dict[int, dict[tuple, int]] = {}
+    for (ridx, vkey), n in variants.items():
+        if vkey[0] == "s":
+            pts = pts_s.get(vkey[1])
+        else:
+            pts = [(st.lat, st.lon) for gid in vkey[1] if (st := stops.get(f"{code}:{gid}"))]
+        if not pts or len(pts) < 2:
+            continue
+        key = tuple((round(la, 5), round(lo, 5)) for la, lo in pts)
+        d = out.setdefault(ridx, {})
+        d[key] = d.get(key, 0) + n  # stejná geometrie z více shape_id = jedna varianta
+    return {ridx: sorted(((n, list(k)) for k, n in d.items()), key=lambda t: (-t[0], t[1])) for ridx, d in out.items()}
+
+
+def simplify(pts: list[tuple[float, float]], tol: float) -> list[tuple[float, float]]:
+    """Douglas–Peucker (iterativně), souřadnice ve stupních."""
+    n = len(pts)
+    if n < 3:
+        return list(pts)
+    keep = [False] * n
+    keep[0] = keep[-1] = True
+    stack = [(0, n - 1)]
+    tol2 = tol * tol
+    while stack:
+        a, b = stack.pop()
+        ax, ay = pts[a]
+        bx, by = pts[b]
+        dx, dy = bx - ax, by - ay
+        dd = dx * dx + dy * dy
+        best, bi = -1.0, -1
+        for i in range(a + 1, b):
+            px, py = pts[i]
+            if dd == 0:
+                d = (px - ax) ** 2 + (py - ay) ** 2
+            else:
+                t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / dd))
+                d = (px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2
+            if d > best:
+                best, bi = d, i
+        if best > tol2:
+            keep[bi] = True
+            stack.append((a, bi))
+            stack.append((bi, b))
+    return [p for p, k in zip(pts, keep) if k]
+
+
+def encode_polyline(pts: list[tuple[float, float]]) -> str:
+    """Google encoded polyline, přesnost 1e-5."""
+    out = []
+    plat = plon = 0
+    for lat, lon in pts:
+        ilat, ilon = round(lat * 1e5), round(lon * 1e5)
+        for v in (ilat - plat, ilon - plon):
+            v = ~(v << 1) if v < 0 else v << 1
+            while v >= 0x20:
+                out.append(chr((0x20 | (v & 0x1F)) + 63))
+                v >>= 5
+            out.append(chr(v + 63))
+        plat, plon = ilat, ilon
+    return "".join(out)
 
 
 def _is_dark(hex6: str) -> bool:

@@ -226,3 +226,46 @@ def test_download_skips_expired_source(tmp_path):
         assert ff is not None and ff.source.endswith("/new.zip")
     finally:
         httpd.shutdown()
+
+
+def decode_polyline(s: str):
+    pts, i, lat, lon = [], 0, 0, 0
+    while i < len(s):
+        vals = []
+        for _ in range(2):
+            shift = res = 0
+            while True:
+                b = ord(s[i]) - 63
+                i += 1
+                res |= (b & 0x1F) << shift
+                shift += 5
+                if b < 0x20:
+                    break
+            vals.append(~(res >> 1) if res & 1 else res >> 1)
+        lat += vals[0]
+        lon += vals[1]
+        pts.append((lat / 1e5, lon / 1e5))
+    return pts
+
+
+def test_polyline_and_simplify():
+    from busnavylet.gtfs import encode_polyline, simplify
+    # referenční příklad z dokumentace Google
+    assert encode_polyline([(38.5, -120.2), (40.7, -120.95), (43.252, -126.453)]) == "_p~iF~ps|U_ulLnnqC_mqNvxq`@"
+    line = [(50.0, 4.0), (50.00001, 4.5), (50.0, 5.0), (51.0, 5.0)]
+    assert simplify(line, 0.00008) == [(50.0, 4.0), (50.0, 5.0), (51.0, 5.0)]
+
+
+def test_line_shapes(built):
+    _, out, m = built
+    assert m["lines"] is True
+    routes = json.loads((out / "routes.json").read_text())
+    idx = {r[0]: i for i, r in enumerate(routes)}
+    # linka 12: T1 má shape SH1 (body na přímce se zjednoduší), T2/T4 jsou bez shape -> spojnice zastávek
+    v12 = json.loads((out / "lines" / f"{idx['12']}.json").read_text())["v"]
+    shapes = [decode_polyline(enc) for _, enc in v12]
+    assert any(p[0] == (50.85, 4.35) and p[-1] == (50.95, 4.55) and len(p) < 6 for p in shapes)
+    # vlak IC bez shapes.txt: stanice Gare (parent) -> Les
+    vic = json.loads((out / "lines" / f"{idx['IC']}.json").read_text())["v"]
+    assert [decode_polyline(enc) for _, enc in vic] == [[(50.8, 4.4), (50.9, 4.5)]]
+    assert all(n >= 1 for n, _ in v12 + vic)
