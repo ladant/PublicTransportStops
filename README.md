@@ -1,15 +1,17 @@
 # Co pojede?
 
-Webová aplikace (PWA) pro plánování výletů veřejnou dopravou. Po kliknutí do mapy ukáže
-zastávky autobusů a vlaků v okruhu, odkud ve zvolený den a časovém okně něco jede.
-Okno **A** (tam) a volitelné okno **B** (zpět) se barevně odliší a zastávky, odkud se dá
-jet tam i zpět, jsou zvýrazněné.
+Webová aplikace (PWA) pro plánování výletů veřejnou dopravou, primárně na mobilu:
+**https://ladant.github.io/PublicTransportStops/**. Po klepnutí do mapy (nebo pro celý výřez
+mapy) ukáže zastávky autobusů, tramvají, metra a vlaků v Belgii, kde se ve zvolený den a
+dvou časech dá přijet nebo odjet. Zastávky dostupné v obou časech jsou zvýrazněné.
+
+**Podrobný popis projektu, rozhodnutí, otevřené body a plán: [`docs/PROJECT.md`](docs/PROJECT.md).**
 
 Data se jednou denně předpočítají z GTFS do statických dlaždic (varianta B ze zadání).
 Za běhu aplikace nezatěžuje žádný zdroj dat a nepotřebuje server.
 
 ```
-feeds.yaml ──► pipeline (Python, GitHub Actions 1× denně) ──► manifest.json, routes.json, tiles/*.json
+feeds.yaml ──► pipeline (Python, GitHub Actions 1× denně) ──► manifest.json, routes.json, tiles/*.json, lines/*.json
                                                                       │
                                                      statický hosting (GitHub Pages)
                                                                       │
@@ -70,22 +72,11 @@ Provozní pojistky:
 - Manifest nese platnost dat každého dopravce. Když zvolený den leží mimo ni, aplikace to
   oznámí, aby prázdná mapa nevypadala jako „nic nejede“.
 
-## Stav vůči zadání
+## Stav
 
-Hotovo (fáze 1 a 2): mapa s kliknutím i dlouhým stiskem, „moje poloha“, okruh 0,5–15 km,
-datum v rámci platnosti, okna A a B (i přes půlnoc), filtr druhu dopravy, barvy A / B / A i B,
-jiná značka pro nádraží, popup s odjezdy, trasou pěšky a odkazem na výluky, seznam linek
-se zvýrazněním zastávek, stav v URL, čeština a angličtina, tmavý režim, offline režim
-(service worker ukládá aplikaci, navštívené dlaždice a mapové podklady).
-
-Zbývá:
-
-- **Ověřit URL zdrojů v `feeds.yaml` při prvním běhu.** Z vývojového prostředí nebyly
-  belgické zdroje dostupné, pipeline je otestovaná na testovacím a syntetickém GTFS.
-- Ruční kontrola 5 zastávek proti webu dopravce (akceptační kritérium) – po prvním
-  sestavení se skutečnými daty.
-- Lighthouse audit PWA na nasazené verzi.
-- Fáze 3: Česko (další feedy do `feeds.yaml`, `default_view`), pozdější GTFS-RT Service Alerts.
+Fáze 1 a 2 zadání jsou hotové a nasazené, včetně dat všech čtyř belgických dopravců
+(SNCB, De Lijn, TEC, STIB) na 14 dní dopředu. Co aplikace umí, otevřené body a možnosti
+dalšího vývoje (mimořádnosti a výluky, Česko) popisuje [`docs/PROJECT.md`](docs/PROJECT.md).
 
 ## Licence
 
