@@ -476,6 +476,9 @@ function depRows(list) {
 }
 
 const winLabel = (w) => `${fmtHm(w[0])}–${fmtHm(w[1])}`;
+// krátký popisek okna pro legendu: 8–11, 7:30–9
+const hShort = (m) => { const v = fmtHm(m); return v.endsWith(':00') ? String(Number(v.slice(0, 2))) : v.replace(/^0/, ''); };
+const winShort = (w) => `${hShort(w[0])}–${hShort(w[1])}`;
 
 function clearStop() {
   selectedId = null;
@@ -521,17 +524,17 @@ function renderStopCard() {
     return;
   }
   const feed = feedOf(s.id);
-  const stateLabel = { a: t('onlyA'), b: t('onlyB'), ab: t('both') }[s.state];
-  const section = (w, cls, title, list) => (w
-    ? `<h4><i class="dot ${cls}"></i>${title} <small>${winLabel(w)}</small></h4>${depRows(list)}` : '');
+  const stateLabel = s.state === 'ab' ? t('runsBoth') : t('runsIn', winShort(s.state === 'a' ? state.a : state.b));
+  const section = (w, cls, list) => (w
+    ? `<h4><i class="dot ${cls}"></i>${t('depsIn')} ${winLabel(w)}</h4>${depRows(list)}` : '');
   card.innerHTML = `
     <header>
       <h3>${esc(s.name)}</h3>
       <button type="button" class="x" aria-label="${esc(t('close'))}">×</button>
     </header>
     <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)} · ${esc(t('away', fmtKm(s.dist)))}</p>
-    ${section(state.a, 'a', t('depsA'), s.depsA)}
-    ${section(state.b, 'b', t('depsB'), s.depsB)}
+    ${section(state.a, 'a', s.depsA)}
+    ${section(state.b, 'b', s.depsB)}
     <p class="links">
       <a href="${esc(walkUrl(state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
       ${feed?.alerts ? `<a href="${esc(feed.alerts)}" target="_blank" rel="noopener">${t('alerts')} (${esc(feed.name)})</a>` : ''}
@@ -551,8 +554,8 @@ function renderLines() {
   ul.innerHTML = selection.lines.map((l) => {
     const stops = [...l.stops.values()];
     const heads = [...l.heads];
-    const counts = (state.a ? `<span class="cnt a" title="${esc(t('depsA'))}">${esc(t('winA'))} ${l.nA}</span>` : '')
-      + (state.b ? `<span class="cnt b" title="${esc(t('depsB'))}">${esc(t('winB'))} ${l.nB}</span>` : '');
+    const cnt = (w, cls, n) => (w ? `<span class="cnt ${cls}" title="${esc(`${t('depsIn')} ${winLabel(w)}`)}">${n}</span>` : '');
+    const counts = cnt(state.a, 'a', l.nA) + cnt(state.b, 'b', l.nB);
     return `<li><button type="button" class="line${l.k === highlight ? ' on' : ''}" data-k="${esc(l.k)}" aria-pressed="${l.k === highlight}">
       <span class="top">${badge(l.route)}<span class="ag">${esc(l.route[5])}</span>${counts}</span>
       <span class="sub"><b>${t('dirs')}:</b> ${esc(heads.slice(0, 4).join(' · '))}${heads.length > 4 ? ' …' : ''}</span>
@@ -565,7 +568,7 @@ function renderLegend() {
   const item = (st, label) => `<span><i class="dot ${st}"></i>${esc(label)}</span>`;
   const a = !state || state.a;
   const b = state && state.b;
-  $('legend').innerHTML = (a ? item('a', t('onlyA')) : '') + (b ? item('b', t('onlyB')) : '')
+  $('legend').innerHTML = (a ? item('a', state ? winShort(state.a) : t('winA')) : '') + (b ? item('b', winShort(state.b)) : '')
     + (a && b ? item('ab', t('both')) : '') + `<span><i class="sq"></i>${esc(t('legendRail'))}</span>`;
 }
 
@@ -661,6 +664,7 @@ async function main() {
     state = next;
     state.d = clampDate(state.d);
     if (moved) clearStop();
+    renderLegend();
     writeControls();
     drawCircle();
     if (moved && state.lat != null) map.flyTo({ center: [state.lon, state.lat], zoom: zoomForRadius(state.r) });
