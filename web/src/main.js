@@ -3,6 +3,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './style.css';
 import {
+  buildPlaceIndex, searchPlaces,
   tilesForBbox,
   computeSelection, dateRange, decodePolyline, passesBbox, passesCircle, dayIndex, decodeState, encodeState, feedsOutOfRange, fmtHm,
   parseHm, parseTile, tilesForCircle,
@@ -100,6 +101,8 @@ function applyI18n() {
   renderSummary();
   $('tramChip').title = t('tramTitle');
   $('locate').title = t('myLocation');
+  $('q').placeholder = t('searchPlace');
+  $('q').setAttribute('aria-label', t('searchPlace'));
   $('reset').title = t('reset');
   $('reset').setAttribute('aria-label', t('reset'));
   $('locate').setAttribute('aria-label', t('myLocation'));
@@ -565,6 +568,50 @@ function resetAll() {
   if (map.getZoom() > 9) map.easeTo({ zoom: 9, duration: 500 });
 }
 
+// ---------- hledání obcí
+
+const PLACES_VERSION = 1; // zvýšit při přegenerování places.json (scripts/build_places.py)
+let placeIndex = null;
+let placeLoad = null;
+let placeHits = [];
+
+function loadPlaces() {
+  if (!placeLoad) {
+    placeLoad = fetch(`places.json?v=${PLACES_VERSION}`)
+      .then((r) => r.json())
+      .then((d) => { placeIndex = buildPlaceIndex(d); })
+      .catch((e) => {
+        console.warn('places', e);
+        placeLoad = null;
+      });
+  }
+  return placeLoad;
+}
+
+async function onSearchInput() {
+  const q = $('q').value;
+  await loadPlaces();
+  if (q !== $('q').value) return; // mezitím se psalo dál
+  placeHits = placeIndex ? searchPlaces(placeIndex, q) : [];
+  const ul = $('qres');
+  if (q.trim().length < 2) {
+    ul.hidden = true;
+    return;
+  }
+  ul.innerHTML = placeHits.length
+    ? placeHits.map((h, i) => `<li role="option"><button type="button" data-i="${i}"><b>${esc(h.label)}</b>${h.label !== h.name ? ` <span>(${esc(h.name)})</span>` : ''}<small>${esc(h.prov)}</small></button></li>`).join('')
+    : `<li class="none">${esc(t('noPlace'))}</li>`;
+  ul.hidden = false;
+}
+
+function goToPlace(h) {
+  $('q').value = h.label;
+  $('qres').hidden = true;
+  $('q').blur();
+  // větší města trochu dál, vesnice blíž
+  map.flyTo({ center: [h.lon, h.lat], zoom: h.w >= 4 ? 12 : 13.5, duration: 900 });
+}
+
 // ---------- trasa zvýrazněné linky
 
 const lineCache = new Map();
@@ -836,6 +883,7 @@ function renderFoot() {
   });
   $('foot').innerHTML = `<p>${esc(t('attribution'))}${esc(feeds)}.</p>
     <p>${esc(t('built', built))} · ${manifest.feeds.map((f) => esc(f.license)).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ')}
+    · Obce © <a href="https://www.geonames.org" target="_blank" rel="noopener">GeoNames</a>
     · Map © <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>
     © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></p>`;
 }
@@ -868,6 +916,23 @@ async function main() {
   $('radius').addEventListener('input', onControlsChange);
   for (const b of document.querySelectorAll('.seg button')) b.addEventListener('click', () => setArea(b.dataset.area));
   $('reset').addEventListener('click', resetAll);
+  $('q').addEventListener('focus', loadPlaces, { once: true });
+  $('q').addEventListener('input', onSearchInput);
+  $('q').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && placeHits.length) goToPlace(placeHits[0]);
+    if (e.key === 'Escape') {
+      $('qres').hidden = true;
+      $('q').blur();
+    }
+  });
+  $('qres').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-i]');
+    if (b) goToPlace(placeHits[Number(b.dataset.i)]);
+  });
+  // klepnutí mimo hledání seznam zavře
+  document.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('#search')) $('qres').hidden = true;
+  });
   renderArea();
   $('stop').addEventListener('click', (e) => {
     if (e.target.closest('.x')) clearStop();

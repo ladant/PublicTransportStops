@@ -313,3 +313,44 @@ export function decodeState(hash, defaults) {
   }
   return st;
 }
+
+// ---- hledání obcí (places.json z GeoNames)
+
+export function normName(s) {
+  return s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[-'’]/g, ' ').trim();
+}
+
+/** Připraví index: každé místo se všemi názvy (hlavní + alternativní) v normalizované podobě. */
+export function buildPlaceIndex(data) {
+  return data.d.map(([name, lat, lon, p, w, alt]) => {
+    const names = [name, ...(alt ? alt.split('|') : [])];
+    return { name, names, norm: names.map(normName), lat, lon, prov: data.p[p] || '', w };
+  });
+}
+
+/**
+ * Hledá obce podle začátku názvu (i alternativního, bez diakritiky).
+ * Pořadí: celý název > začátek názvu > začátek slova, pak významnost (w), pak délka.
+ * Vrací [{label (nalezený název), name (hlavní), lat, lon, prov}].
+ */
+export function searchPlaces(index, query, limit = 6) {
+  const q = normName(query);
+  if (q.length < 2) return [];
+  const hits = [];
+  for (const pl of index) {
+    let best = 9, label = pl.name;
+    pl.norm.forEach((n, i) => {
+      let sc = 9;
+      if (n === q) sc = 0;
+      else if (n.startsWith(q)) sc = 1;
+      else if (n.split(/[\s(]+/).some((w) => w.startsWith(q))) sc = 2;
+      if (sc < best) {
+        best = sc;
+        label = pl.names[i];
+      }
+    });
+    if (best < 9) hits.push({ sc: best, label, name: pl.name, lat: pl.lat, lon: pl.lon, prov: pl.prov, w: pl.w });
+  }
+  hits.sort((a, b) => a.sc - b.sc || b.w - a.w || a.label.length - b.label.length || a.label.localeCompare(b.label));
+  return hits.slice(0, limit);
+}
