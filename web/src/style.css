@@ -186,7 +186,7 @@ button { font: inherit; color: inherit; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--text); font-weight: 600; }
 .radius { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
-.radius[hidden] { display: none; }
+.radius[hidden] { display: flex; visibility: hidden; }
 .radius output { white-space: nowrap; min-width: 52px; }
 .radius input { flex: 1; min-height: 32px; accent-color: var(--accent); }
 

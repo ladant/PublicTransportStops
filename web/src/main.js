@@ -296,7 +296,7 @@ function makeIcon(color, square, big) {
 // špendlík vybraného bodu: tvarem i barvou jiný než kulaté barevné zastávky
 function makePin(fill, inner) {
   const ratio = 2;
-  const w = 28 * ratio, h = 38 * ratio;
+  const w = 20 * ratio, h = 28 * ratio; // menší než dřív, ať nezakrývá okolní zastávky
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -305,13 +305,13 @@ function makePin(fill, inner) {
   const cx = w / 2, cy = r + 2 * ratio;
   g.beginPath();
   g.moveTo(cx, h - 1 * ratio);
-  g.bezierCurveTo(cx - r * 0.35, h - 12 * ratio, cx - r, cy + r * 0.6, cx - r, cy);
+  g.bezierCurveTo(cx - r * 0.35, h - 9 * ratio, cx - r, cy + r * 0.6, cx - r, cy);
   g.arc(cx, cy, r, Math.PI, 0);
-  g.bezierCurveTo(cx + r, cy + r * 0.6, cx + r * 0.35, h - 12 * ratio, cx, h - 1 * ratio);
+  g.bezierCurveTo(cx + r, cy + r * 0.6, cx + r * 0.35, h - 9 * ratio, cx, h - 1 * ratio);
   g.closePath();
   g.fillStyle = fill;
   g.strokeStyle = inner;
-  g.lineWidth = 2 * ratio;
+  g.lineWidth = 1.5 * ratio;
   g.fill();
   g.stroke();
   g.beginPath();
