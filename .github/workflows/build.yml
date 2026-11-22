@@ -1,0 +1,131 @@
+name: Data a nasazení
+
+# Denní sestavení v 17:00 belgického času (build_hour ve feeds.yaml).
+# Cron je v UTC, proto běží v 15:00 i 16:00 UTC a krok "gate" pustí dál jen
+# první běh, kdy je v Bruselu >= build_hour a dnes se ještě nesestavovalo.
+# Tak to funguje v letním (UTC+2) i zimním (UTC+1) čase.
+on:
+  schedule:
+    - cron: '0 15 * * *'
+    - cron: '0 16 * * *'
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q tests
+      - run: npm ci
+        working-directory: web
+      - run: npm test
+        working-directory: web
+
+  build:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gate (jen plánovaný běh)
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          tz=$(python3 -c "import yaml;print(yaml.safe_load(open('feeds.yaml')).get('timezone','Europe/Brussels'))")
+          hour=$(python3 -c "import yaml;print(yaml.safe_load(open('feeds.yaml')).get('build_hour',17))")
+          now_h=$(TZ=$tz date +%-H); today=$(TZ=$tz date +%F)
+          last=$(cat data-build.txt 2>/dev/null || true)
+          if [ "$now_h" -ge "$hour" ] && [ "$last" != "$today" ]; then echo "run=true" >> "$GITHUB_OUTPUT";
+          else echo "run=false" >> "$GITHUB_OUTPUT"; echo "Přeskakuji: $TZ hodina $now_h, poslední sestavení $last"; fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
+
+      # Stažené feedy + ETagy mezi běhy; když zdroj selže, použije se poslední platná verze.
+      - uses: actions/cache@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          path: cache/feeds
+          key: feeds-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: feeds-
+
+      - name: Datová pipeline
+        id: pipeline
+        if: steps.gate.outputs.run == 'true'
+        env:
+          SNCB_GTFS_URL: ${{ secrets.SNCB_GTFS_URL }}
+          DELIJN_API_KEY: ${{ secrets.DELIJN_API_KEY }}
+          TEC_GTFS_URL: ${{ secrets.TEC_GTFS_URL }}
+          STIB_API_KEY: ${{ secrets.STIB_API_KEY }}
+          PYTHONPATH: pipeline
+        run: |
+          pip install -r requirements.txt
+          python -m busnavylet --config feeds.yaml --out out/data --cache cache/feeds
+
+      - name: Sestavení webu
+        if: steps.gate.outputs.run == 'true'
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          cp -r ../out/data dist/data
+          du -sh dist dist/data
+
+      - name: Rozhodnutí o nasazení
+        id: decide
+        run: |
+          if [ "${{ steps.gate.outputs.run }}" != "true" ]; then echo "deploy=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # plánovaný běh bez změny feedů ani počátečního dne = nic nového k nasazení
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ steps.pipeline.outputs.changed }}" = "false" ]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"; else echo "deploy=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.decide.outputs.deploy == 'true'
+        with: { path: web/dist }
+
+      # Commit s datem sestavení drží plánovaný workflow aktivní
+      # (GitHub ho ve veřejném repozitáři vypne po 60 dnech bez aktivity).
+      - name: Záznam data sestavení
+        if: steps.gate.outputs.run == 'true' && github.event_name != 'push' && github.ref_name == github.event.repository.default_branch
+        run: |
+          TZ=$(python3 -c "import yaml;print(yaml.safe_load(open('feeds.yaml')).get('timezone','Europe/Brussels'))") date +%F > data-build.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data-build.txt
+          git diff --cached --quiet || (git commit -m "Data sestavena $(cat data-build.txt)" && git push)
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

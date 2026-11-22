@@ -1,0 +1,60 @@
+# Konfigurace datové pipeline „Bus na výlet“.
+#
+# URL a hlavičky mohou obsahovat ${PROMENNA}; hodnota se vezme z proměnné
+# prostředí (v GitHub Actions z GitHub Secrets). Když proměnná chybí,
+# zdroj se přeskočí a zkusí se další v pořadí (záložní zrcadla).
+#
+# POZOR: URL zrcadel je potřeba při prvním běhu ověřit – z vývojového
+# prostředí nebyla dostupná. Pipeline vypíše do logu, který zdroj použila.
+
+timezone: Europe/Brussels
+build_hour: 17          # místní hodina, kdy se má denní sestavení spustit (viz workflow)
+days: 10                # na kolik dní dopředu se předpočítává kalendář (víc = větší dlaždice)
+grid:
+  dlat: 0.1             # výška dlaždice ve stupních šířky
+  dlon: 0.15            # šířka dlaždice ve stupních délky
+tile_max_gzip_bytes: 300000   # větší dlaždice se rozdělí na 4 menší
+tile_max_depth: 4
+default_view:           # výchozí výsek mapy [lon, lat, zoom]
+  center: [4.47, 50.64]
+  zoom: 7.3
+
+feeds:
+  - code: sncb
+    name: SNCB/NMBS
+    license: CC-BY-4.0
+    alerts_url: https://www.belgiantrain.be/en/travel-info/current-traffic
+    sources:
+      - url: ${SNCB_GTFS_URL}          # oficiální URL po udělení licence (gtfs@sncb.be)
+      - url: https://data.gtfs.be/sncb
+      - url: https://gtfs.irail.be/nmbs/gtfs/latest.zip
+      - url: https://files.mobilitydatabase.org/mdb-1859/latest.zip
+
+  - code: delijn
+    name: De Lijn
+    license: CC-BY-4.0
+    alerts_url: https://www.delijn.be/en/storingen/
+    sources:
+      - url: https://api.delijn.be/gtfs/static/v3/gtfs_transit.zip
+        headers:
+          Ocp-Apim-Subscription-Key: ${DELIJN_API_KEY}
+      - url: https://gtfs.irail.be/de-lijn/de_lijn-gtfs.zip
+
+  - code: tec
+    name: TEC
+    license: CC-BY-4.0
+    alerts_url: https://www.letec.be/
+    sources:
+      - url: ${TEC_GTFS_URL}
+      - url: https://data.gtfs.be/tec
+      - url: https://files.mobilitydatabase.org/mdb-1868/latest.zip
+
+  - code: stib
+    name: STIB/MIVB
+    license: CC-BY-4.0
+    alerts_url: https://www.stib-mivb.be/
+    sources:
+      - url: https://stibmivb.opendatasoft.com/api/explore/v2.1/catalog/datasets/gtfs-files-production/alternative_exports/gtfszip/
+        headers:
+          Authorization: Apikey ${STIB_API_KEY}
+      - url: https://gtfs.irail.be/mivb/gtfs/latest.zip

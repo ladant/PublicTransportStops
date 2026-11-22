@@ -1,0 +1,4 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_color,route_text_color
+R1,A1,12,Centrum - Konecna,3,FF0000,FFFFFF
+R2,A1,IC,Intercity,2,,
+R3,A1,101,Kyvadlo,700,,

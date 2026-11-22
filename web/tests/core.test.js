@@ -1,0 +1,111 @@
+// node --test tests/  (spouští Python pipeline nad testovacím GTFS)
+import { test, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import {
+  cell, computeSelection, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange,
+  normWindow, parseTile, tileBbox, tilesForCircle,
+} from '../src/core.js';
+
+const ROOT = resolve(import.meta.dirname, '../..');
+let manifest, routes, out;
+
+function loadTiles(keys) {
+  return keys.flatMap((k) => parseTile(JSON.parse(readFileSync(join(out, 'tiles', `${k}.json`), 'utf8'))));
+}
+
+function select(lat, lon, r, date, a, b = null, modes = ['bus', 'rail', 'tram']) {
+  const keys = tilesForCircle(manifest, lat, lon, r);
+  return computeSelection(loadTiles(keys), routes, {
+    lat, lon, r, day: dayIndex(manifest.start, date), a, b, modes: new Set(modes),
+  });
+}
+
+before(() => {
+  out = join(mkdtempSync(join(tmpdir(), 'bnv-')), 'data');
+  execFileSync('python3', ['-m', 'busnavylet', '--config', 'tests/fixtures/feeds.yaml',
+    '--only', 'mini', '--only', 'cdonly',
+    '--local', 'mini=tests/fixtures/mini', '--local', 'cdonly=tests/fixtures/cdonly',
+    '--out', out, '--cache', join(out, '..', 'cache'), '--today', '2026-11-22'],
+  { cwd: ROOT, env: { ...process.env, PYTHONPATH: join(ROOT, 'pipeline') }, stdio: 'pipe' });
+  manifest = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  routes = JSON.parse(readFileSync(join(out, 'routes.json'), 'utf8'));
+});
+
+test('mřížka a hranice dlaždic', () => {
+  assert.equal(cell(4.35, 0.15), 29);
+  assert.equal(cell(4.3499, 0.15), 28);
+  const [s, w, n, e] = tileBbox('508_29_3', [0.1, 0.15]);
+  assert.ok(Math.abs(s - 50.85) < 1e-9 && Math.abs(w - 4.425) < 1e-9 && Math.abs(n - 50.9) < 1e-9 && Math.abs(e - 4.5) < 1e-9);
+});
+
+test('kruh přes hranici dlaždic najde obě zastávky Centrum', () => {
+  const keys = tilesForCircle(manifest, 50.85, 4.35, 0.5);
+  assert.ok(keys.length >= 2);
+  const sel = select(50.85, 4.35, 0.5, '2026-11-23', [480, 600]);
+  const ids = sel.stops.map((s) => s.id).sort();
+  assert.deepEqual(ids, ['mini:S1', 'mini:S1b']);
+});
+
+test('okna A/B a stavy zastávek', () => {
+  // pondělí: S1 08:00 (A), S1b 09:25 (B), S3 07:00/07:30/08:20
+  const sel = select(50.87, 4.42, 15, '2026-11-23', [470, 500], [560, 570]);
+  const byId = Object.fromEntries(sel.stops.map((s) => [s.id, s]));
+  assert.equal(byId['mini:S1'].state, 'a');
+  assert.equal(byId['mini:S1b'].state, 'b');
+  assert.equal(byId['mini:S3'].state, 'a');
+  assert.deepEqual(byId['mini:S3'].depsA.map((d) => d.t), [500]);
+  assert.equal(byId['mini:S4'], undefined); // 09:00 mimo obě okna
+  const ab = select(50.87, 4.42, 15, '2026-11-23', [415, 425], [445, 455]);
+  assert.equal(ab.stops.find((s) => s.id === 'mini:S3').state, 'ab');
+});
+
+test('nádraží (parent_station) a filtr druhu dopravy', () => {
+  const sel = select(50.8, 4.4, 1, '2026-11-22', [0, 1439]);
+  assert.equal(sel.stops.length, 1);
+  assert.equal(sel.stops[0].id, 'mini:STA');
+  assert.equal(sel.stops[0].rail, true);
+  assert.equal(select(50.8, 4.4, 1, '2026-11-22', [0, 1439], null, ['bus']).stops.length, 0);
+});
+
+test('spoj po půlnoci patří k následujícímu dni', () => {
+  // T4 25:10 jede v pracovní dny -> úterý 01:10, ne pondělí 01:10
+  const tue = select(50.85, 4.35, 0.2, '2026-11-24', [60, 80]);
+  assert.deepEqual(tue.stops.find((s) => s.id === 'mini:S1').depsA.map((d) => [d.t, d.h]), [[70, 'Noc']]);
+  const mon = select(50.85, 4.35, 0.2, '2026-11-23', [60, 80]);
+  assert.equal(mon.stops.length, 0);
+  // okno přes půlnoc: pondělí 23:00–02:00 zachytí týž spoj jako t = 1510
+  const night = select(50.85, 4.35, 0.2, '2026-11-23', [1380, 120]);
+  assert.deepEqual(night.stops.find((s) => s.id === 'mini:S1').depsA.map((d) => d.t), [1510]);
+});
+
+test('seznam linek', () => {
+  const sel = select(50.87, 4.42, 15, '2026-11-23', [0, 1439]);
+  const l12 = sel.lines.find((l) => l.route[0] === '12');
+  assert.ok(l12.nA >= 3);
+  assert.ok(l12.heads.has('Les') && l12.heads.has('Centrum'));
+  assert.ok(l12.stops.has('mini:S1'));
+});
+
+test('platnost dat podle dopravce', () => {
+  assert.deepEqual(feedsOutOfRange(manifest, '2026-11-22').map((f) => f.code), ['cdonly']);
+  assert.deepEqual(feedsOutOfRange(manifest, '2026-11-24'), []);
+  assert.deepEqual(dateRange(manifest), { min: '2026-11-22', max: '2026-12-01' });
+});
+
+test('stav v URL', () => {
+  const st = {
+    lat: 50.85, lon: 4.35, r: 3.5, d: '2026-11-24', a: [480, 660], b: [900, 1140], modes: new Set(['bus', 'rail']),
+  };
+  const back = decodeState(`#${encodeState(st)}`, { r: 3, a: [0, 1], b: null, modes: ['bus', 'rail', 'tram'] });
+  assert.equal(back.lat, 50.85);
+  assert.equal(back.r, 3.5);
+  assert.equal(back.d, '2026-11-24');
+  assert.deepEqual(back.a, [480, 660]);
+  assert.deepEqual(back.b, [900, 1140]);
+  assert.deepEqual([...back.modes].sort(), ['bus', 'rail']);
+  assert.deepEqual(normWindow([1380, 120]), [1380, 1560]);
+});
