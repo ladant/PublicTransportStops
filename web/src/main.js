@@ -305,12 +305,13 @@ function setupLayers() {
   map.addLayer({
     id: 'route-casing', type: 'line', source: 'route',
     layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: { 'line-color': isDark() ? '#0b1220' : '#ffffff', 'line-width': 8, 'line-opacity': 0.9 },
+    // tmavý lem odliší trasu od silnic v podkladu (žlutá linka na žluté silnici)
+    paint: { 'line-color': isDark() ? '#ffffff' : '#111827', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 6, 15, 10] },
   });
   map.addLayer({
     id: 'route-line', type: 'line', source: 'route',
     layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: { 'line-color': ['get', 'color'], 'line-width': 4.5 },
+    paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 3, 15, 5.5] },
   });
   map.addLayer({
     id: 'stops', type: 'symbol', source: 'stops',
