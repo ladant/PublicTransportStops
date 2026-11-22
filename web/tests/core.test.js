@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
   cell, computeSelection, dateRange, dayIndex, decodeState, encodeState, feedsOutOfRange,
-  normWindow, parseTile, tileBbox, tilesForCircle,
+  decodePolyline, normWindow, parseTile, passesCircle, tileBbox, tilesForCircle,
 } from '../src/core.js';
 
 const ROOT = resolve(import.meta.dirname, '../..');
@@ -131,4 +131,20 @@ test('okno Tam je volitelné (a=off v URL)', () => {
   assert.deepEqual(back.b, [900, 1140]);
   const sel = select(50.87, 4.42, 15, '2026-11-23', null, [560, 570]);
   assert.ok(sel.stops.every((s) => s.state === 'b' && s.depsA.length === 0));
+});
+
+test('trasy linek: dekódování polyline a průchod okruhem', () => {
+  assert.deepEqual(decodePolyline('_p~iF~ps|U_ulLnnqC_mqNvxq`@'), [[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]);
+  const pts = [[50.8, 4.4], [50.9, 4.5]];
+  assert.equal(passesCircle(pts, 50.8, 4.4, 1), true);
+  assert.equal(passesCircle(pts, 51.5, 4.4, 5), false);
+  const sel = select(50.87, 4.42, 15, '2026-11-23', [0, 1439]);
+  assert.ok(sel.lines.every((l) => l.rs.size >= 1 && l.rs.has(l.r)));
+});
+
+test('pipeline zapisuje trasy linek', () => {
+  assert.equal(manifest.lines, true);
+  const ic = routes.findIndex((r) => r[0] === 'IC');
+  const v = JSON.parse(readFileSync(join(out, 'lines', `${ic}.json`), 'utf8')).v;
+  assert.deepEqual(decodePolyline(v[0][1]), [[50.8, 4.4], [50.9, 4.5]]);
 });
