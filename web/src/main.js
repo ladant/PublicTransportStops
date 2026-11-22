@@ -59,7 +59,9 @@ let mapReady = false;
 let state = null;
 let selection = null;
 let highlight = null; // klíč linky (l.k)
-let popup = null;
+let popup = null; // malý štítek vybrané zastávky na mapě
+let selectedId = null; // vybraná zastávka (detail pod mapou)
+const desktopQuery = window.matchMedia('(min-width: 900px)');
 let computeSeq = 0;
 const tileCache = new Map();
 
@@ -86,6 +88,8 @@ function applyI18n() {
   for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
   $('lang').textContent = t('lang');
   applyTheme();
+  $('locate').title = t('myLocation');
+  $('locate').setAttribute('aria-label', t('myLocation'));
   renderLegend();
   renderFoot();
 }
@@ -133,15 +137,24 @@ function loadTile(key) {
 
 // ---------- stav a ovládání
 
+function readWindow(use, from, to) {
+  if (!$(use).checked) return null;
+  const w = [parseHm($(from).value), parseHm($(to).value)];
+  return w[0] != null && w[1] != null ? w : null;
+}
+
 function readControls() {
-  const a = [parseHm($('a1').value), parseHm($('a2').value)];
-  const b = $('useB').checked ? [parseHm($('b1').value), parseHm($('b2').value)] : null;
   const modes = new Set([...document.querySelectorAll('input[name=mode]:checked')].map((i) => i.value));
   state.d = clampDate($('date').value);
-  state.a = a[0] != null && a[1] != null ? a : state.a;
-  state.b = b && b[0] != null && b[1] != null ? b : null;
+  state.a = readWindow('useA', 'a1', 'a2');
+  state.b = readWindow('useB', 'b1', 'b2');
   state.r = Number($('radius').value);
   state.modes = modes;
+}
+
+function markWindows() {
+  $('winA').classList.toggle('off', !$('useA').checked);
+  $('winB').classList.toggle('off', !$('useB').checked);
 }
 
 function writeControls() {
@@ -149,14 +162,17 @@ function writeControls() {
   $('date').min = min;
   $('date').max = max;
   $('date').value = state.d;
-  $('a1').value = fmtHm(state.a[0]);
-  $('a2').value = fmtHm(state.a[1]);
+  $('useA').checked = !!state.a;
+  if (state.a) {
+    $('a1').value = fmtHm(state.a[0]);
+    $('a2').value = fmtHm(state.a[1]);
+  }
   $('useB').checked = !!state.b;
   if (state.b) {
     $('b1').value = fmtHm(state.b[0]);
     $('b2').value = fmtHm(state.b[1]);
   }
-  $('winB').classList.toggle('off', !state.b);
+  markWindows();
   $('radius').value = String(state.r);
   $('rOut').textContent = fmtKm(state.r);
   for (const i of document.querySelectorAll('input[name=mode]')) i.checked = state.modes.has(i.value);
@@ -168,7 +184,8 @@ function saveState() {
 
 function onControlsChange() {
   readControls();
-  $('winB').classList.toggle('off', !state.b);
+  markWindows();
+  renderLegend();
   $('rOut').textContent = fmtKm(state.r);
   saveState();
   drawCircle();
@@ -321,7 +338,7 @@ function initMap() {
   map.on('click', (e) => {
     const hit = mapReady && map.queryRenderedFeatures(e.point, { layers: ['stops'] })
       .filter((f) => !f.properties.dim)[0];
-    if (hit) openPopup(hit.properties.id);
+    if (hit) selectStop(hit.properties.id);
     else setPoint(e.lngLat.lat, e.lngLat.lng);
   });
   // dlouhý stisk na mobilu (contextmenu ho v mobilních prohlížečích nahrazuje)
@@ -356,7 +373,7 @@ function setPoint(lat, lon, fly = false) {
   state.lat = lat;
   state.lon = lon;
   highlight = null;
-  if (popup) popup.remove();
+  clearStop();
   saveState();
   drawCircle();
   if (fly) map.flyTo({ center: [lon, lat], zoom: zoomForRadius(state.r) });
@@ -396,6 +413,14 @@ async function recompute() {
     setStatus(t('pickPoint'));
     return;
   }
+  if (!state.a && !state.b) {
+    selection = null;
+    renderStops();
+    renderLines();
+    clearStop();
+    setStatus(t('needWindow'));
+    return;
+  }
   const outOfRange = feedsOutOfRange(manifest, state.d);
   if (outOfRange.length) showNotice(t('outOfRange', outOfRange.map((f) => f.name).join(', ')));
   else hideNotice();
@@ -419,6 +444,8 @@ async function recompute() {
   if (highlight != null && !selection.lines.some((l) => l.k === highlight)) highlight = null;
   renderStops();
   renderLines();
+  if (selectedId && !selection.stops.some((x) => x.id === selectedId)) clearStop();
+  else renderStopCard();
   setStatus(selection.stops.length ? t('summary', selection.stops.length, selection.lines.length) : t('noStops'));
 }
 
@@ -448,26 +475,68 @@ function depRows(list) {
   return `<ul class="deps">${rows.join('')}</ul>`;
 }
 
-function openPopup(id) {
+const winLabel = (w) => `${fmtHm(w[0])}–${fmtHm(w[1])}`;
+
+function clearStop() {
+  selectedId = null;
+  if (popup) popup.remove();
+  popup = null;
+  $('stop').hidden = true;
+  $('stop').innerHTML = '';
+}
+
+function selectStop(id) {
   const s = selection?.stops.find((x) => x.id === id);
   if (!s) return;
+  selectedId = id;
+  if (popup) popup.remove();
+  // na mapě jen úsporný štítek, detaily jsou pod mapou
+  popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false, focusAfterOpen: false, offset: 12, className: 'stop-tip' })
+    .setLngLat([s.lon, s.lat])
+    .setHTML(`<i class="dot ${s.state}"></i><span>${esc(s.name)}</span>`)
+    .addTo(map);
+  renderStopCard();
+  revealStopCard();
+}
+
+function revealStopCard() {
+  const card = $('stop');
+  if (card.hidden) return;
+  if (desktopQuery.matches) {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+  // mobil: posunout stránku tak, aby byl vidět začátek detailu a pořád kus mapy
+  const top = card.getBoundingClientRect().top;
+  if (top > window.innerHeight * 0.7 || top < 0) {
+    window.scrollBy({ top: top - window.innerHeight * 0.55, behavior: 'smooth' });
+  }
+}
+
+function renderStopCard() {
+  const card = $('stop');
+  const s = selectedId && selection?.stops.find((x) => x.id === selectedId);
+  if (!s) {
+    card.hidden = true;
+    return;
+  }
   const feed = feedOf(s.id);
   const stateLabel = { a: t('onlyA'), b: t('onlyB'), ab: t('both') }[s.state];
-  const html = `
-    <div class="pop">
+  const section = (w, cls, title, list) => (w
+    ? `<h4><i class="dot ${cls}"></i>${title} <small>${winLabel(w)}</small></h4>${depRows(list)}` : '');
+  card.innerHTML = `
+    <header>
       <h3>${esc(s.name)}</h3>
-      <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)} · ${esc(t('away', fmtKm(s.dist)))}</p>
-      <h4>${t('depsA')} <small>${fmtHm(state.a[0])}–${fmtHm(state.a[1])}</small></h4>
-      ${depRows(s.depsA)}
-      ${state.b ? `<h4>${t('depsB')} <small>${fmtHm(state.b[0])}–${fmtHm(state.b[1])}</small></h4>${depRows(s.depsB)}` : ''}
-      <p class="links">
-        <a href="${esc(walkUrl(state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
-        ${feed?.alerts ? `<a href="${esc(feed.alerts)}" target="_blank" rel="noopener">${t('alerts')} (${esc(feed.name)})</a>` : ''}
-      </p>
-    </div>`;
-  if (popup) popup.remove();
-  popup = new maplibregl.Popup({ maxWidth: '340px', focusAfterOpen: false, className: 'stop-popup' })
-    .setLngLat([s.lon, s.lat]).setHTML(html).addTo(map);
+      <button type="button" class="x" aria-label="${esc(t('close'))}">×</button>
+    </header>
+    <p class="meta"><span class="dot ${s.state}"></span>${esc(stateLabel)} · ${esc(t('away', fmtKm(s.dist)))}</p>
+    ${section(state.a, 'a', t('depsA'), s.depsA)}
+    ${section(state.b, 'b', t('depsB'), s.depsB)}
+    <p class="links">
+      <a href="${esc(walkUrl(state, s))}" target="_blank" rel="noopener">${t('walk')}</a>
+      ${feed?.alerts ? `<a href="${esc(feed.alerts)}" target="_blank" rel="noopener">${t('alerts')} (${esc(feed.name)})</a>` : ''}
+    </p>`;
+  card.hidden = false;
 }
 
 function renderLines() {
@@ -482,7 +551,8 @@ function renderLines() {
   ul.innerHTML = selection.lines.map((l) => {
     const stops = [...l.stops.values()];
     const heads = [...l.heads];
-    const counts = `<span class="cnt a" title="${esc(t('depsA'))}">A ${l.nA}</span>${state.b ? `<span class="cnt b" title="${esc(t('depsB'))}">B ${l.nB}</span>` : ''}`;
+    const counts = (state.a ? `<span class="cnt a" title="${esc(t('depsA'))}">${esc(t('winA'))} ${l.nA}</span>` : '')
+      + (state.b ? `<span class="cnt b" title="${esc(t('depsB'))}">${esc(t('winB'))} ${l.nB}</span>` : '');
     return `<li><button type="button" class="line${l.k === highlight ? ' on' : ''}" data-k="${esc(l.k)}" aria-pressed="${l.k === highlight}">
       <span class="top">${badge(l.route)}<span class="ag">${esc(l.route[5])}</span>${counts}</span>
       <span class="sub"><b>${t('dirs')}:</b> ${esc(heads.slice(0, 4).join(' · '))}${heads.length > 4 ? ' …' : ''}</span>
@@ -493,8 +563,10 @@ function renderLines() {
 
 function renderLegend() {
   const item = (st, label) => `<span><i class="dot ${st}"></i>${esc(label)}</span>`;
-  $('legend').innerHTML = item('a', t('onlyA')) + item('b', t('onlyB')) + item('ab', t('both'))
-    + `<span><i class="sq"></i>${esc(t('legendRail'))}</span>`;
+  const a = !state || state.a;
+  const b = state && state.b;
+  $('legend').innerHTML = (a ? item('a', t('onlyA')) : '') + (b ? item('b', t('onlyB')) : '')
+    + (a && b ? item('ab', t('both')) : '') + `<span><i class="sq"></i>${esc(t('legendRail'))}</span>`;
 }
 
 function renderFoot() {
@@ -530,6 +602,10 @@ async function main() {
 
   $('controls').addEventListener('input', onControlsChange);
   $('controls').addEventListener('change', onControlsChange);
+  $('radius').addEventListener('input', onControlsChange);
+  $('stop').addEventListener('click', (e) => {
+    if (e.target.closest('.x')) clearStop();
+  });
   $('theme').addEventListener('click', () => {
     theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
     try {
@@ -545,6 +621,7 @@ async function main() {
     applyI18n();
     if (selection) {
       renderLines();
+      renderStopCard();
       setStatus(selection.stops.length ? t('summary', selection.stops.length, selection.lines.length) : t('noStops'));
     } else if (state.lat == null) setStatus(t('pickPoint'));
   });
@@ -571,6 +648,11 @@ async function main() {
         pts.forEach((s) => b.extend([s.lon, s.lat]));
         map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 400 });
       }
+      // mobil: ukázat mapu, ať je zvýraznění vidět
+      if (!desktopQuery.matches) {
+        const top = $('mapwrap').getBoundingClientRect().top;
+        if (top < 0) window.scrollBy({ top: top - 4, behavior: 'smooth' });
+      }
     }
   });
   window.addEventListener('hashchange', () => {
@@ -578,6 +660,7 @@ async function main() {
     const moved = next.lat !== state.lat || next.lon !== state.lon;
     state = next;
     state.d = clampDate(state.d);
+    if (moved) clearStop();
     writeControls();
     drawCircle();
     if (moved && state.lat != null) map.flyTo({ center: [state.lon, state.lat], zoom: zoomForRadius(state.r) });
@@ -585,7 +668,7 @@ async function main() {
   });
   recompute();
   // pro ladění a end-to-end testy
-  window.busNaVylet = { get map() { return map; }, get selection() { return selection; }, openPopup };
+  window.busNaVylet = { get map() { return map; }, get selection() { return selection; }, selectStop };
 
   if ('serviceWorker' in navigator && import.meta.env.PROD) {
     navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW', e));

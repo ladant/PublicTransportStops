@@ -121,3 +121,14 @@ test('linky se stejným číslem a dopravcem se v seznamu slučují', () => {
   assert.deepEqual([...ic.heads].sort(), ['X', 'Y']);
   assert.equal(ic.stops.size, 2);
 });
+
+test('okno Tam je volitelné (a=off v URL)', () => {
+  const st = { lat: 50, lon: 4, r: 3, d: '2026-11-24', a: null, b: [900, 1140], modes: new Set(['bus', 'rail', 'tram']) };
+  const hash = encodeState(st);
+  assert.match(hash, /a=off/);
+  const back = decodeState(`#${hash}`, { r: 3, a: [480, 660], b: null, modes: ['bus', 'rail', 'tram'] });
+  assert.equal(back.a, null);
+  assert.deepEqual(back.b, [900, 1140]);
+  const sel = select(50.87, 4.42, 15, '2026-11-23', null, [560, 570]);
+  assert.ok(sel.stops.every((s) => s.state === 'b' && s.depsA.length === 0));
+});
