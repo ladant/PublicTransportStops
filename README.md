@@ -56,7 +56,8 @@ Se skutečnými daty: `PYTHONPATH=pipeline python -m busnavylet --out web/public
 2. V **Settings → Secrets and variables → Actions** volitelně nastavit klíče:
    `DELIJN_API_KEY` (data.delijn.be), `STIB_API_KEY` (opendata.stib-mivb.be),
    `SNCB_GTFS_URL` (po udělení licence SNCB), `TEC_GTFS_URL`.
-   Bez nich se použijí záložní zrcadla bez klíče.
+   SNCB, TEC a STIB mají záložní zdroje bez klíče. **De Lijn bez klíče nejde**:
+   spolehlivé zrcadlo neexistuje, klíč je zdarma na data.delijn.be.
 3. Workflow běží při pushi do `main`, ručně (*Run workflow*) a denně v 17:00 belgického času.
 
 Provozní pojistky:
