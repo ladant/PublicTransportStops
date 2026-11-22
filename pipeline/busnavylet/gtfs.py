@@ -166,12 +166,17 @@ class Route:
     url: str = ""
 
 
+# pořadí polí jedné události na zastávce (viz docs/data-format.md)
+EVENT_FIELDS = ("m", "a", "r", "h", "o", "c", "f", "s", "e")
+EVENT_LEN = len(EVENT_FIELDS)
+
+
 @dataclass
 class FeedData:
     code: str
     stops: dict[str, Stop] = field(default_factory=dict)
     routes: list[Route] = field(default_factory=list)
-    # zastávka -> array('i') s čtveřicemi (minuta, linka(lokální), směr(globální intern), maska(globální intern))
+    # zastávka -> array('i') s devíticemi EVENT_FIELDS (linka lokální, cíl/výchozí/maska globální intern)
     departures: dict[str, array] = field(default_factory=dict)
     valid_from: date | None = None
     valid_to: date | None = None
@@ -353,12 +358,13 @@ def load_feed(code: str, path, start: date, ndays: int,
             freqs.setdefault(tid, []).append((s, e, hw))
 
     # --- stop_times: sběr po spojích do kompaktních polí
-    # pro každý spoj: array('i') [seq, stop_ref, arr, dep, pickup, ...] (None jako -1)
+    # pro každý spoj: array('i') [seq, stop_ref, arr, dep, nelze_nastoupit, nelze_vystoupit, ...] (None jako -1)
     stop_ref = Interner()
     per_trip: dict[str, array] = {}
-    cols = ["trip_id", "stop_id", "stop_sequence", "arrival_time", "departure_time", "pickup_type", "stop_headsign"]
+    cols = ["trip_id", "stop_id", "stop_sequence", "arrival_time", "departure_time", "pickup_type",
+            "drop_off_type", "stop_headsign"]
     stop_heads: dict[tuple[str, int], str] = {}
-    for tid, sid, seq, arr, dep, pick, sh in g.raw_rows("stop_times.txt", cols):
+    for tid, sid, seq, arr, dep, pick, drop, sh in g.raw_rows("stop_times.txt", cols):
         if tid not in trips:
             continue
         try:
@@ -367,37 +373,42 @@ def load_feed(code: str, path, start: date, ndays: int,
             continue
         a = parse_time(arr)
         d = parse_time(dep)
-        if d is None:
-            d = a
-        if a is None:
-            a = d
         buf = per_trip.get(tid)
         if buf is None:
             buf = per_trip[tid] = array("i")
         buf.extend((q, stop_ref(sid), -1 if a is None else a, -1 if d is None else d,
-                    1 if pick == "1" else 0))
+                    1 if pick == "1" else 0, 1 if drop == "1" else 0))
         if sh:
             stop_heads[(tid, q)] = sh
 
-    deps: dict[str, list[tuple[int, int, int, int]]] = {}
+    # událost na zastávce: (odjezd m, m - příjezd, linka, cíl, výchozí zastávka, maska, příznaky,
+    #                       m - odjezd z výchozí, příjezd do cílové - m); příznaky: 1 nástup, 2 výstup
+    events: dict[str, list[tuple[int, ...]]] = {}
     # varianty tras: (linka, ('s', shape_id) | ('q', posloupnost stanic)) -> počet spojů
     variants: dict[tuple[int, tuple], int] = {}
     for tid in sorted(per_trip):
         buf = per_trip[tid]
-        rows = sorted((tuple(buf[i:i + 5]) for i in range(0, len(buf), 5)), key=lambda t: t[0])
+        rows = sorted((tuple(buf[i:i + 6]) for i in range(0, len(buf), 6)), key=lambda t: t[0])
         if len(rows) < 2:
             continue
         ridx, mask, head, shape_id = trips[tid]
         mode = fd.routes[ridx].mode
         seqs = [r[0] for r in rows]
-        dtimes = _interpolate([None if r[3] < 0 else r[3] for r in rows], seqs)
+        # chybějící odjezd = příjezd a naopak, pak lineární dopočet
+        dtimes = _interpolate([r[3] if r[3] >= 0 else (r[2] if r[2] >= 0 else None) for r in rows], seqs)
+        atimes = _interpolate([r[2] if r[2] >= 0 else (r[3] if r[3] >= 0 else None) for r in rows], seqs)
+        first_sid = stop_ref.items[rows[0][1]]
         last_sid = stop_ref.items[rows[-1][1]]
         if not head:
             head = stop_name.get(last_sid, "")
+        first_gid = group_of.get(first_sid)
+        first_st = fd.stops.get(f"{code}:{first_gid}") if first_gid else None
+        origin_i = heads(first_st.name if first_st else stop_name.get(first_sid, ""))
+        t_first, t_last = dtimes[0], atimes[-1]
         mask_i = masks_intern(mask)
         offsets = [0]
         if tid in freqs:
-            first = dtimes[0] if dtimes[0] is not None else 0
+            first = t_first if t_first is not None else 0
             offsets = []
             for s, e, hw in freqs[tid]:
                 t = s
@@ -416,30 +427,36 @@ def load_feed(code: str, path, start: date, ndays: int,
             vkey = ("q", tuple(seq_g))
         variants[(ridx, vkey)] = variants.get((ridx, vkey), 0) + len(offsets)
         prev_gid = None
-        for i, r in enumerate(rows[:-1]):  # poslední zastávka: jen výstup
+        last = len(rows) - 1
+        for i, r in enumerate(rows):
             sid = stop_ref.items[r[1]]
             gid = group_of.get(sid)
-            if gid is None or r[4] == 1 or dtimes[i] is None:
+            if gid is None or dtimes[i] is None or atimes[i] is None:
                 continue
-            if gid == prev_gid:
+            if gid == prev_gid:  # dvě nástupiště téže stanice za sebou
                 continue
             prev_gid = gid
-            h = stop_heads.get((tid, r[0]), head)
-            hi = heads(h)
+            flags = (1 if i < last and r[4] != 1 else 0) | (2 if i > 0 and r[5] != 1 else 0)
+            if not flags:
+                continue
             key = f"{code}:{gid}"
             st = fd.stops.get(key)
             if st is None:
                 continue
             st.modes |= MODE_BIT[mode]
-            lst = deps.setdefault(key, [])
+            m = dtimes[i]
+            hi = heads(stop_heads.get((tid, r[0]), head))
+            ev = (max(0, m - atimes[i]), ridx, hi, origin_i, mask_i, flags,
+                  max(0, m - t_first) if t_first is not None else 0,
+                  max(0, t_last - m) if t_last is not None else 0)
+            lst = events.setdefault(key, [])
             for off in offsets:
-                lst.append((dtimes[i] + off, ridx, hi, mask_i))
+                lst.append((m + off,) + ev)
         del per_trip[tid]
 
-    for key, lst in deps.items():
-        uniq = sorted(set(lst))
+    for key, lst in events.items():
         a = array("i")
-        for t in uniq:
+        for t in sorted(set(lst)):
             a.extend(t)
         fd.departures[key] = a
     fd.lines = _line_shapes(g, code, variants, fd.stops)

@@ -117,7 +117,15 @@ button { font: inherit; color: inherit; }
 }
 .win.a:not(.off) { border-color: color-mix(in srgb, var(--a) 55%, var(--line)); }
 .win.b:not(.off) { border-color: color-mix(in srgb, var(--b) 55%, var(--line)); }
-.wtitle { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; min-height: 34px; cursor: pointer; flex: 0 0 auto; min-width: 78px; }
+.wtitle { display: flex; align-items: center; gap: 5px; min-height: 34px; cursor: pointer; flex: 0 0 auto; }
+/* přepínač příjezdy / odjezdy u každého času */
+.kind {
+  flex: 0 0 auto; min-width: 92px; min-height: 32px; padding: 0 8px; font-size: 13px; font-weight: 600; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.win.a .kind { color: var(--a); }
+.win.b .kind { color: var(--b); }
+.win.off .kind { opacity: 0.45; }
 .wtitle input { width: 18px; height: 18px; margin: 0; }
 .win.a .wtitle input { accent-color: var(--a); }
 .win.b .wtitle input { accent-color: var(--b); }
@@ -188,7 +196,16 @@ button { font: inherit; color: inherit; }
 .stopcard .links { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; font-size: 13px; }
 .stopcard .links a { min-height: 32px; display: inline-flex; align-items: center; }
 .deps { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.deps li { display: flex; align-items: center; gap: 6px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.deps li { padding: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.deps summary { display: flex; align-items: center; gap: 6px; padding: 4px 0; cursor: pointer; list-style: none; }
+.deps summary::-webkit-details-marker { display: none; }
+.deps details[open] summary { font-weight: 600; }
+.deps .trip {
+  margin: 0 0 6px 50px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px;
+}
+.deps .trip b { color: var(--text); }
+.deps .trip time { font-variant-numeric: tabular-nums; }
+.deps .trip .arrow { color: var(--muted); }
 .deps li:last-child { border-bottom: 0; }
 .deps time { font-variant-numeric: tabular-nums; font-weight: 600; width: 44px; flex-shrink: 0; }
 .deps .head { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

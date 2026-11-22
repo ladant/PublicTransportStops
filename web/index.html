@@ -34,7 +34,8 @@
           </div>
           <div class="wins">
             <div class="win a" id="winA">
-              <label class="wtitle"><input type="checkbox" id="useA" checked /><i class="dot a"></i><span data-i18n="winA"></span></label>
+              <label class="wtitle"><input type="checkbox" id="useA" checked aria-label="1. čas" /><i class="dot a"></i></label>
+              <button type="button" class="kind" id="kindA" data-w="a"></button>
               <div class="times">
                 <input type="time" id="a1" value="08:00" step="300" aria-label="1. čas od" />
                 <span>–</span>
@@ -42,7 +43,8 @@
               </div>
             </div>
             <div class="win b off" id="winB">
-              <label class="wtitle"><input type="checkbox" id="useB" /><i class="dot b"></i><span data-i18n="winB"></span></label>
+              <label class="wtitle"><input type="checkbox" id="useB" aria-label="2. čas" /><i class="dot b"></i></label>
+              <button type="button" class="kind" id="kindB" data-w="b"></button>
               <div class="times">
                 <input type="time" id="b1" value="15:00" step="300" aria-label="2. čas od" />
                 <span>–</span>
