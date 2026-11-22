@@ -54,8 +54,10 @@ Se skutečnými daty: `PYTHONPATH=pipeline python -m busnavylet --out web/public
 
 1. V nastavení repozitáře **Settings → Pages** zvolit *Source: GitHub Actions*.
 2. Data se stahují z [Belgian Mobility Open Data Portal](https://data.belgianmobility.io/en/data.html),
-   který nabízí GTFS všech čtyř dopravců bez klíče. Secrets `DELIJN_API_KEY`, `STIB_API_KEY`,
-   `SNCB_GTFS_URL` a `TEC_GTFS_URL` jsou volitelné a slouží jen pro záložní zdroje.
+   který nabízí GTFS všech čtyř dopravců. Bez klíče platí limit 100 stažení denně; doporučený
+   secret **`BMC_API_KEY`** (Primary key z developer portálu) se posílá v hlavičce
+   `Ocp-Apim-Subscription-Key`. Secrets `DELIJN_API_KEY`, `STIB_API_KEY`, `SNCB_GTFS_URL`
+   a `TEC_GTFS_URL` jsou volitelné a slouží jen pro záložní zdroje.
 3. Workflow běží při pushi do `main`, ručně (*Run workflow*) a denně v 17:00 belgického času.
 
 Provozní pojistky:

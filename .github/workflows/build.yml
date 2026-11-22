@@ -78,6 +78,7 @@ jobs:
         id: pipeline
         if: steps.gate.outputs.run == 'true'
         env:
+          BMC_API_KEY: ${{ secrets.BMC_API_KEY }}
           SNCB_GTFS_URL: ${{ secrets.SNCB_GTFS_URL }}
           DELIJN_API_KEY: ${{ secrets.DELIJN_API_KEY }}
           TEC_GTFS_URL: ${{ secrets.TEC_GTFS_URL }}

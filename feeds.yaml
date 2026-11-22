@@ -20,7 +20,9 @@ default_view:           # výchozí výsek mapy [lon, lat, zoom]
   zoom: 7.3
 
 # Hlavní zdroj: Belgian Mobility Open Data Portal (data.belgianmobility.io),
-# GTFS všech čtyř dopravců, aktualizace denně, stažení bez klíče.
+# GTFS všech čtyř dopravců, aktualizace denně.
+# S klíčem z developer portálu (secret BMC_API_KEY) se stahuje přes API pro
+# registrované uživatele s vyšším limitem; bez klíče anonymně (100 stažení/den).
 # Ostatní zdroje jsou záložní.
 feeds:
   - code: sncb
@@ -28,6 +30,9 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.belgiantrain.be/en/travel-info/current-traffic
     sources:
+      - url: https://api-management-opendata-production.azure-api.net/api/gtfs/feed/nmbssncb/static
+        headers:
+          Ocp-Apim-Subscription-Key: ${BMC_API_KEY}
       - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/nmbssncb/static
       - url: ${SNCB_GTFS_URL}          # oficiální URL po udělení licence (gtfs@sncb.be)
       - url: https://gtfs.irail.be/nmbs/gtfs/latest.zip
@@ -38,6 +43,9 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.delijn.be/en/storingen/
     sources:
+      - url: https://api-management-opendata-production.azure-api.net/api/gtfs/feed/delijn/static
+        headers:
+          Ocp-Apim-Subscription-Key: ${BMC_API_KEY}
       - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/delijn/static
       - url: https://api.delijn.be/gtfs/static/v3/gtfs_transit.zip
         headers:
@@ -48,6 +56,9 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.letec.be/
     sources:
+      - url: https://api-management-opendata-production.azure-api.net/api/gtfs/feed/tec/static
+        headers:
+          Ocp-Apim-Subscription-Key: ${BMC_API_KEY}
       - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/tec/static
       - url: ${TEC_GTFS_URL}
       - url: https://files.mobilitydatabase.org/mdb-1868/latest.zip
@@ -57,6 +68,9 @@ feeds:
     license: CC-BY-4.0
     alerts_url: https://www.stib-mivb.be/
     sources:
+      - url: https://api-management-opendata-production.azure-api.net/api/gtfs/feed/stibmivb/static
+        headers:
+          Ocp-Apim-Subscription-Key: ${BMC_API_KEY}
       - url: https://api-management-discovery-production.azure-api.net/api/gtfs/feed/stibmivb/static
       - url: https://stibmivb.opendatasoft.com/api/explore/v2.1/catalog/datasets/gtfs-files-production/alternative_exports/gtfszip/
         headers:
