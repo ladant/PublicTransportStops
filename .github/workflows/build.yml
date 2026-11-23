@@ -1,13 +1,13 @@
 name: Data a nasazení
 
-# Denní sestavení v 17:00 belgického času (build_hour ve feeds.yaml).
-# Cron je v UTC, proto běží v 15:00 i 16:00 UTC a krok "gate" pustí dál jen
-# první běh, kdy je v Bruselu >= build_hour a dnes se ještě nesestavovalo.
-# Tak to funguje v letním (UTC+2) i zimním (UTC+1) čase.
+# Denní sestavení od 17:00 belgického času (build_hour ve feeds.yaml).
+# GitHub plánované běhy často zpožďuje o hodiny nebo je vynechá (hlavně na celou
+# hodinu), proto cron zkouší každou hodinu v :17 od 15 do 23 UTC a krok "gate"
+# pustí dál jen první běh, kdy je v Bruselu >= build_hour a dnes se ještě
+# nesestavovalo. Funguje v letním (UTC+2) i zimním (UTC+1) čase.
 on:
   schedule:
-    - cron: '0 15 * * *'
-    - cron: '0 16 * * *'
+    - cron: '17 15-23 * * *'
   push:
     branches: [main]
   pull_request:

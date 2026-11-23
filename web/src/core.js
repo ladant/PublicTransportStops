@@ -97,8 +97,11 @@ export function addDays(iso, n) {
 }
 
 /** Rozsah dat, která lze vybrat: den po `start` až konec masky. */
-export function dateRange(manifest) {
-  return { min: addDays(manifest.start, 1), max: addDays(manifest.start, manifest.days - 1) };
+export function dateRange(manifest, todayIso = null) {
+  let min = addDays(manifest.start, 1);
+  // starší sestavení (např. ráno před denním během): nenabízet dny, které už byly
+  if (todayIso && todayIso > min) min = todayIso;
+  return { min, max: addDays(manifest.start, manifest.days - 1) };
 }
 
 /** 'HH:MM' -> minuty */

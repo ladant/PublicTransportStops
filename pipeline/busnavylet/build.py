@@ -61,7 +61,8 @@ def build(cfg: Config, feeds: list[tuple[Feed, Path, Path | None]], out_dir: Pat
           now: datetime | None = None) -> dict:
     """feeds: (konfigurace, aktuální zip, předchozí zip). Vrací manifest."""
     start = today - timedelta(days=1)        # včerejšek kvůli spojům po půlnoci
-    ndays = cfg.days + 1
+    # včerejšek + dnešek + cfg.days dní: i ráno před dalším sestavením je vidět cfg.days dní dopředu
+    ndays = cfg.days + 2
     nbytes = (ndays + 7) // 8
     heads = Interner()
     masks = Interner()
