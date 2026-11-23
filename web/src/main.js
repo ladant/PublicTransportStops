@@ -86,7 +86,7 @@ function todayIso() {
 }
 
 function clampDate(iso) {
-  const { min, max } = dateRange(manifest);
+  const { min, max } = dateRange(manifest, todayIso());
   if (!iso || iso < min) return min;
   if (iso > max) return max;
   return iso;
@@ -175,7 +175,7 @@ function markWindows() {
 }
 
 function writeControls() {
-  const { min, max } = dateRange(manifest);
+  const { min, max } = dateRange(manifest, todayIso());
   $('date').min = min;
   $('date').max = max;
   $('date').value = state.d;
@@ -608,8 +608,11 @@ function goToPlace(h) {
   $('q').value = h.label;
   $('qres').hidden = true;
   $('q').blur();
-  // větší města trochu dál, vesnice blíž
-  map.flyTo({ center: [h.lon, h.lat], zoom: h.w >= 4 ? 12 : 13.5, duration: 900 });
+  // špendlík do středu obce a základní okruh 3 km
+  state.r = DEFAULTS.r;
+  $('radius').value = String(state.r);
+  $('rOut').textContent = fmtKm(state.r);
+  setPoint(h.lat, h.lon, true);
 }
 
 // ---------- trasa zvýrazněné linky

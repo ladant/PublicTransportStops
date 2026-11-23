@@ -27,7 +27,7 @@ tramvaje a metro a o konkrétní příjezdy a odjezdy.
 - **✕ Zrušit výběr:** zruší bod, výřez, kartu i zvýraznění a oddálí na přehled regionu (zoom 9).
 - **Hledání obce** v poli nahoře v mapě: ~12 500 belgických obcí, vesnic a osad z GeoNames, i podle
   francouzských, nizozemských, německých, anglických a českých tvarů (Liège / Luik / Lutych) a bez
-  diakritiky. Výběr mapu přiblíží (města zoom 12, vesnice 13,5); Enter vezme první výsledek.
+  diakritiky. Výběr zapíchne špendlík do středu obce a nastaví okruh 3 km; Enter vezme první výsledek.
   Seznam (`web/public/places.json`, 140 kB gzip) se stáhne až při prvním hledání a funguje offline.
 
 ### Nastavení nad mapou
@@ -124,8 +124,12 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 - `SNCB_GTFS_URL`, `TEC_GTFS_URL`, `STIB_API_KEY` – volitelné záložní zdroje.
 
 ### Provozní pojistky
-- Plánované sestavení běží v 15:00 i 16:00 UTC; projde jen první, kdy je v Bruselu ≥ 17:00 a dnes
-  se ještě nesestavovalo (funguje v letním i zimním čase).
+- Plánované sestavení se zkouší každou hodinu v :17 od 15 do 23 UTC; projde jen první běh, kdy je
+  v Bruselu ≥ 17:00 a dnes se ještě nesestavovalo (funguje v letním i zimním čase). Více pokusů je
+  nutných: GitHub plánované běhy zpožďuje o hodiny nebo je vynechá (22. 11. přišly s 5h zpožděním,
+  23. 11. do večera vůbec).
+- Data pokrývají včerejšek, dnešek a 14 dní dopředu, takže i ráno před dalším sestavením je vidět
+  14 dní dopředu; výběr data nikdy nenabídne den v minulosti.
 - Commit `data-build.txt` drží plánovaný workflow aktivní (GitHub ho jinak po 60 dnech vypne).
 - Když zdroj selže nebo vrátí zastaralý feed, použije se další zdroj, případně poslední platná verze.
 - Když sestavení selže, na webu zůstanou poslední platná data a GitHub pošle e-mail.
@@ -207,3 +211,4 @@ chybí). Hlášení vyhlášená po 17:00 se projeví až další den – odkaz 
 | #9 | příjezdy/odjezdy u každého času, rozbalení spoje, formát dat v2 |
 | #10 | špendlík, výřez mapy, ✕ zrušit vše, 14 dní dat, tento dokument |
 | #11 | hledání obcí v mapě (GeoNames) |
+| #12 | spolehlivější denní sestavení, data o den dál, hledání obce zapíchne špendlík s okruhem 3 km |
