@@ -59,7 +59,7 @@ tramvaje a metro a o konkrétní příjezdy a odjezdy.
 
 ```
 Belgian Mobility Open Data Portal (GTFS 4 dopravců, klíč BMC_API_KEY)
-        │  1× denně v 17:00 belgického času (GitHub Actions)
+        │  1× denně od 4:00 belgického času (GitHub Actions)
         ▼
 pipeline/busnavylet (Python)
   stažení (ETag, záložní zdroje, poslední platná verze, přeskočení zastaralých feedů)
@@ -124,10 +124,12 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 - `SNCB_GTFS_URL`, `TEC_GTFS_URL`, `STIB_API_KEY` – volitelné záložní zdroje.
 
 ### Provozní pojistky
-- Plánované sestavení se zkouší každou hodinu v :17 od 15 do 23 UTC; projde jen první běh, kdy je
-  v Bruselu ≥ 17:00 a dnes se ještě nesestavovalo (funguje v letním i zimním čase). Více pokusů je
-  nutných: GitHub plánované běhy zpožďuje o hodiny nebo je vynechá (22. 11. přišly s 5h zpožděním,
-  23. 11. do večera vůbec).
+- Denní sestavení **od 4:00 belgického času**, aby uživatel ráno měl data na celý den. Cron zkouší
+  každou hodinu v :17 celý den; projde jen první běh, kdy je v Bruselu ≥ 4:00 a dnes se ještě
+  nesestavovalo, ostatní skončí za pár sekund. Hodně pokusů je nutných: GitHub plánované běhy u
+  tohoto repozitáře zpožďuje o hodiny nebo vynechává (22. 11. 5h zpoždění, 23. 11. z devíti
+  večerních pokusů žádný). Kdyby ani to nestačilo, spolehlivá záloha je externí plánovač
+  (např. cron-job.org), který přes GitHub API spustí workflow (`workflow_dispatch`).
 - Data pokrývají včerejšek, dnešek a 14 dní dopředu, takže i ráno před dalším sestavením je vidět
   14 dní dopředu; výběr data nikdy nenabídne den v minulosti.
 - Commit `data-build.txt` drží plánovaný workflow aktivní (GitHub ho jinak po 60 dnech vypne).
@@ -139,6 +141,7 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 
 | Rozhodnutí | Proč |
 | --- | --- |
+| Denní sestavení od 4:00 místo 17:00 | data čerstvá ráno, kdy s nimi lidé pracují; dopravci aktualizují přes noc |
 | Předpočet do statických dlaždic místo živého API (Transitous) | žádný server, zdroje zatíží 1 stažení denně, offline |
 | GitHub Pages místo Netlify/Cloudflare | zdarma, bez dalšího účtu, nasazení přímo z Actions |
 | Belgian Mobility jako hlavní zdroj | jediný funkční zdroj všech 4 dopravců; zrcadla iRail/Mobility Database byla nefunkční nebo zastaralá |
@@ -176,7 +179,7 @@ Portál nabízí hlášení o mimořádnostech, která jdou stahovat jednou denn
 | SNCB GTFS-RT Service Alerts | jen obecná hlášení bez vazby na stanice | nanejvýš obecné upozornění |
 
 U SNCB je potřeba ověřit, zda plánované výluky už nejsou přímo v jízdním řádu (vlak pak v datech
-chybí). Hlášení vyhlášená po 17:00 se projeví až další den – odkaz „Ověřit výluky“ zůstává.
+chybí). Hlášení vyhlášená po ranním sestavení se projeví až další den – odkaz „Ověřit výluky“ zůstává.
 
 ### 7.2 Česko (fáze 3 původního zadání)
 - Kraje vydávají GTFS samostatně (např. PID jen na 14 dní dopředu); celostátní JDF nemá souřadnice.
@@ -212,3 +215,4 @@ chybí). Hlášení vyhlášená po 17:00 se projeví až další den – odkaz 
 | #10 | špendlík, výřez mapy, ✕ zrušit vše, 14 dní dat, tento dokument |
 | #11 | hledání obcí v mapě (GeoNames) |
 | #12 | spolehlivější denní sestavení, data o den dál, hledání obce zapíchne špendlík s okruhem 3 km |
+| #13 | denní sestavení od 4:00, pokus každou hodinu |

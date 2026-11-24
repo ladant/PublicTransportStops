@@ -1,13 +1,14 @@
 name: Data a nasazení
 
-# Denní sestavení od 17:00 belgického času (build_hour ve feeds.yaml).
-# GitHub plánované běhy často zpožďuje o hodiny nebo je vynechá (hlavně na celou
-# hodinu), proto cron zkouší každou hodinu v :17 od 15 do 23 UTC a krok "gate"
-# pustí dál jen první běh, kdy je v Bruselu >= build_hour a dnes se ještě
-# nesestavovalo. Funguje v letním (UTC+2) i zimním (UTC+1) čase.
+# Denní sestavení od 4:00 belgického času (build_hour ve feeds.yaml), aby měl
+# uživatel ráno data na celý den. GitHub plánované běhy u tohoto repozitáře
+# zpožďuje o hodiny nebo vynechává, proto cron zkouší každou hodinu (v :17, ne na
+# celou hodinu) celý den a krok "gate" pustí dál jen první běh, kdy je v Bruselu
+# >= build_hour a dnes se ještě nesestavovalo. Ostatní pokusy skončí za pár sekund.
+# Funguje v letním (UTC+2) i zimním (UTC+1) čase.
 on:
   schedule:
-    - cron: '17 15-23 * * *'
+    - cron: '17 * * * *'
   push:
     branches: [main]
   pull_request:
@@ -112,7 +113,7 @@ jobs:
       # Commit s datem sestavení drží plánovaný workflow aktivní
       # (GitHub ho ve veřejném repozitáři vypne po 60 dnech bez aktivity).
       - name: Záznam data sestavení
-        if: steps.gate.outputs.run == 'true' && github.event_name != 'push' && github.ref == 'refs/heads/main'
+        if: steps.gate.outputs.run == 'true' && github.ref == 'refs/heads/main'
         run: |
           TZ=$(python3 -c "import yaml;print(yaml.safe_load(open('feeds.yaml')).get('timezone','Europe/Brussels'))") date +%F > data-build.txt
           git config user.name "github-actions[bot]"
