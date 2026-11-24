@@ -60,7 +60,7 @@ Se skutečnými daty: `PYTHONPATH=pipeline python -m busnavylet --out web/public
    secret **`BMC_API_KEY`** (Primary key z developer portálu) se posílá v hlavičce
    `bmc-partner-key`. Secrets `DELIJN_API_KEY`, `STIB_API_KEY`, `SNCB_GTFS_URL`
    a `TEC_GTFS_URL` jsou volitelné a slouží jen pro záložní zdroje.
-3. Workflow běží při pushi do `main`, ručně (*Run workflow*) a denně v 17:00 belgického času.
+3. Workflow běží při pushi do `main`, ručně (*Run workflow*) a denně od 4:00 belgického času.
 
 Provozní pojistky:
 
