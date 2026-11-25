@@ -155,6 +155,15 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 
 ## 6. Otevřené body
 
+- **Spolehlivost denního sestavení (případně dořešit).** GitHub plánované běhy u tohoto repozitáře
+  spouští jen výjimečně: z ~18 hodinových pokusů mezi 24. 11. 10:17 UTC a 25. 11. ráno proběhly
+  jen 2, se zpožděním ~55 min. 25. 11. data přesto vznikla v 5:11 belgického času, takže to zatím
+  stačí. Pokud se některý den data nesestaví (na webu chybí dnešek, `data-build.txt` má staré
+  datum), řešení: bezplatný externí plánovač (např. cron-job.org) každé ráno ~4:30 zavolá
+  `POST https://api.github.com/repos/ladant/PublicTransportStops/actions/workflows/build.yml/dispatches`
+  s `{"ref":"main"}` a fine-grained tokenem s oprávněním *Actions: write* jen pro tento repozitář.
+  Gate v workflow zajistí, že se i tak sestaví jen jednou denně. Ruční nouzové spuštění:
+  *Actions → Data a nasazení → Run workflow*.
 - **Akceptační kritérium „5 zastávek proti webu dopravce“** – ruční kontrola zatím neproběhla.
 - **Lighthouse audit PWA** na nasazené verzi zatím neproběhl.
 - **STIB** zveřejňuje data jen na pár týdnů dopředu (teď do 16. 12.); aplikace na to upozorní.
