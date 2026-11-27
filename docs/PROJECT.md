@@ -124,12 +124,19 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 - `SNCB_GTFS_URL`, `TEC_GTFS_URL`, `STIB_API_KEY` – volitelné záložní zdroje.
 
 ### Provozní pojistky
-- Denní sestavení **od 4:00 belgického času**, aby uživatel ráno měl data na celý den. Cron zkouší
+- **Hlavní spouštěč denního sestavení je externí plánovač cron-job.org** (účet správce projektu):
+  každý den ve 4:30 belgického času zavolá
+  `POST https://api.github.com/repos/ladant/PublicTransportStops/actions/workflows/build.yml/dispatches`
+  s tělem `{"ref":"main"}` a fine-grained tokenem (jen tento repozitář, *Actions: Read and write*).
+  Od 27. 11. 2026 funguje: spuštění 4:30, data na webu ve 4:35. Při selhání pošle cron-job.org e-mail.
+  **Token má omezenou platnost – před vypršením ho na GitHubu obnovit a vyměnit v cron-job.org.**
+  Důvod: vlastní plánované běhy GitHubu tento repozitář spouštěl jen výjimečně (24.–26. 11. jen asi
+  každý desátý pokus, s nepředvídatelným zpožděním, např. 26. 11. až v 9:16).
+- Záloha: vlastní plánované běhy GitHubu – denní sestavení **od 4:00 belgického času**, aby uživatel ráno měl data na celý den. Cron zkouší
   každou hodinu v :17 celý den; projde jen první běh, kdy je v Bruselu ≥ 4:00 a dnes se ještě
   nesestavovalo, ostatní skončí za pár sekund. Hodně pokusů je nutných: GitHub plánované běhy u
   tohoto repozitáře zpožďuje o hodiny nebo vynechává (22. 11. 5h zpoždění, 23. 11. z devíti
-  večerních pokusů žádný). Kdyby ani to nestačilo, spolehlivá záloha je externí plánovač
-  (např. cron-job.org), který přes GitHub API spustí workflow (`workflow_dispatch`).
+  večerních pokusů žádný).
 - Data pokrývají včerejšek, dnešek a 14 dní dopředu, takže i ráno před dalším sestavením je vidět
   14 dní dopředu; výběr data nikdy nenabídne den v minulosti.
 - Commit `data-build.txt` drží plánovaný workflow aktivní (GitHub ho jinak po 60 dnech vypne).
@@ -155,15 +162,6 @@ repozitáře zdarma. Sestavení trvá ~4 min a potřebuje ~1 GB RAM.
 
 ## 6. Otevřené body
 
-- **Spolehlivost denního sestavení (případně dořešit).** GitHub plánované běhy u tohoto repozitáře
-  spouští jen výjimečně: z ~18 hodinových pokusů mezi 24. 11. 10:17 UTC a 25. 11. ráno proběhly
-  jen 2, se zpožděním ~55 min. 25. 11. data přesto vznikla v 5:11 belgického času, takže to zatím
-  stačí. Pokud se některý den data nesestaví (na webu chybí dnešek, `data-build.txt` má staré
-  datum), řešení: bezplatný externí plánovač (např. cron-job.org) každé ráno ~4:30 zavolá
-  `POST https://api.github.com/repos/ladant/PublicTransportStops/actions/workflows/build.yml/dispatches`
-  s `{"ref":"main"}` a fine-grained tokenem s oprávněním *Actions: write* jen pro tento repozitář.
-  Gate v workflow zajistí, že se i tak sestaví jen jednou denně. Ruční nouzové spuštění:
-  *Actions → Data a nasazení → Run workflow*.
 - **Akceptační kritérium „5 zastávek proti webu dopravce“** – ruční kontrola zatím neproběhla.
 - **Lighthouse audit PWA** na nasazené verzi zatím neproběhl.
 - **STIB** zveřejňuje data jen na pár týdnů dopředu (teď do 16. 12.); aplikace na to upozorní.
@@ -225,3 +223,4 @@ chybí). Hlášení vyhlášená po ranním sestavení se projeví až další d
 | #11 | hledání obcí v mapě (GeoNames) |
 | #12 | spolehlivější denní sestavení, data o den dál, hledání obce zapíchne špendlík s okruhem 3 km |
 | #13 | denní sestavení od 4:00, pokus každou hodinu |
+| #14–15 | plán a zápis externího plánovače cron-job.org (spouští sestavení ve 4:30) |
