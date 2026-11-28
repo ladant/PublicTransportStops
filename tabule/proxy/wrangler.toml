@@ -1,0 +1,7 @@
+name = "mhd-tabule-proxy"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Po nasazení aplikace zúžit na její origin, např. "https://ladant.github.io"
+ALLOWED_ORIGIN = "*"

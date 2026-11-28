@@ -39,6 +39,20 @@ jobs:
       - run: npm test
         working-directory: web
 
+  # Odjezdy MHD (tabule/): jen testy, nasazení zatím ruční. Samostatný job, aby neblokoval data.
+  tabule:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tabule
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: tabule/package-lock.json }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
   build:
     needs: test
     if: github.event_name != 'pull_request'

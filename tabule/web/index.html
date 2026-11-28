@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Odjezdy</title>
+  <meta name="description" content="Odjezdy MHD z nejbližší zastávky">
+  <meta name="theme-color" content="#14181f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <header class="top">
+    <button id="prev" class="nav" aria-label="Bližší zastávka">‹</button>
+    <div class="title">
+      <h1 id="name">Odjezdy</h1>
+      <p id="meta" class="meta"></p>
+    </div>
+    <button id="next" class="nav" aria-label="Další zastávka">›</button>
+  </header>
+
+  <div class="toolbar">
+    <button id="search-btn" class="tool" aria-expanded="false">🔍 Hledat</button>
+    <button id="locate" class="tool">📍 Poloha</button>
+    <button id="only-favs" class="tool" aria-pressed="false">★ Jen oblíbené</button>
+    <button id="reload" class="tool" aria-label="Obnovit">⟳</button>
+  </div>
+
+  <div id="search" class="search" hidden>
+    <input id="q" type="search" placeholder="Název zastávky" autocomplete="off" enterkeyhint="search">
+    <ul id="results"></ul>
+  </div>
+
+  <p id="notice" class="notice" hidden></p>
+  <main id="board" aria-live="polite"></main>
+  <nav id="dots" class="dots" aria-label="Pořadí zastávky"></nav>
+
+  <footer class="foot">Data © PID / Golemio · <span id="status"></span></footer>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

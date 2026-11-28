@@ -1,0 +1,31 @@
+{
+  "stops": [{ "stop_id": "U1040Z1P", "stop_name": "Anděl", "platform_code": "A" }],
+  "departures": [
+    {
+      "arrival_timestamp": { "predicted": "2026-11-28T12:03:30+01:00", "scheduled": "2026-11-28T12:02:00+01:00" },
+      "delay": { "is_available": true, "minutes": 1, "seconds": 90 },
+      "departure_timestamp": { "predicted": "2026-11-28T12:03:30+01:00", "scheduled": "2026-11-28T12:02:00+01:00", "minutes": "3" },
+      "last_stop": { "id": "U1072Z2P", "name": "Plzeňka" },
+      "route": { "short_name": "9", "type": 0, "is_night": false, "is_regional": false, "is_substitute_transport": false },
+      "stop": { "id": "U1040Z1P", "platform_code": "A" },
+      "trip": { "direction": null, "headsign": "Nákladové nádraží Žižkov", "id": "9_1234_261128", "is_at_stop": false, "is_canceled": false, "is_wheelchair_accessible": true, "is_air_conditioned": true, "short_name": null }
+    },
+    {
+      "arrival_timestamp": { "predicted": "2026-11-28T12:10:00+01:00", "scheduled": "2026-11-28T12:10:00+01:00" },
+      "delay": { "is_available": false, "minutes": null, "seconds": null },
+      "departure_timestamp": { "predicted": "2026-11-28T12:10:00+01:00", "scheduled": "2026-11-28T12:10:00+01:00", "minutes": "10" },
+      "route": { "short_name": "B", "type": 1, "is_night": false },
+      "stop": { "id": "U1040Z102P", "platform_code": "2" },
+      "trip": { "headsign": "Černý Most", "id": "B_77", "is_canceled": false }
+    },
+    {
+      "departure_timestamp": { "scheduled": "2026-11-28T12:15:00+01:00" },
+      "delay": { "is_available": true, "minutes": 0, "seconds": 0 },
+      "route": { "short_name": "907", "type": 3, "is_night": true },
+      "stop": { "id": "U1040Z5P", "platform_code": "E" },
+      "trip": { "headsign": "Divoká Šárka", "is_canceled": true }
+    },
+    { "route": { "short_name": "X" }, "stop": { "id": "U1040Z9P" }, "trip": {} }
+  ],
+  "infotexts": []
+}

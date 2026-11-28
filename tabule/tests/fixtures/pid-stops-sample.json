@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-11-28T04:12:02",
+  "dataFormatVersion": "3",
+  "stopGroups": [
+    {
+      "name": "Anděl", "uniqueName": "Anděl", "node": 1040, "avgLat": 50.0711632, "avgLon": 14.4034691, "municipality": "Praha",
+      "stops": [
+        { "id": "1040/1", "platform": "A", "lat": 50.07193, "lon": 14.40363, "mainTrafficType": "tram", "gtfsIds": ["U1040Z1P"],
+          "lines": [
+            { "name": "4", "type": "tram", "direction": "Čechovo náměstí" },
+            { "name": "7", "type": "tram", "direction": "Bílá labuť" },
+            { "name": "98", "type": "tram", "isNight": true, "direction": "Olšanské hřbitovy" }
+          ] },
+        { "id": "1040/102", "platform": "2", "mainTrafficType": "metroB", "gtfsIds": ["U1040Z102P"],
+          "lines": [{ "name": "B", "type": "metro", "direction": "Černý Most" }] },
+        { "id": "1040/99", "mainTrafficType": "undefined", "gtfsIds": [] }
+      ]
+    },
+    { "name": "Náves", "uniqueName": "Lety,Náves", "node": 9001, "avgLat": 49.9, "avgLon": 14.25, "municipality": "Lety",
+      "stops": [{ "id": "9001/1", "mainTrafficType": "undefined", "gtfsIds": ["U9001Z1"], "lines": [] }] },
+    { "name": "Bez sloupků", "node": 9002, "avgLat": 50, "avgLon": 14, "stops": [] }
+  ]
+}
