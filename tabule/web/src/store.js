@@ -24,8 +24,19 @@ export const store = {
   },
   get onlyFavs() { return Boolean(state.onlyFavs); },
   set onlyFavs(v) { state.onlyFavs = v; save(); },
-  get position() { return state.position ?? null; }, // { lat, lon, at, manual }
-  set position(p) { state.position = p; save(); },
+  get view() { return state.view === 'list' ? 'list' : 'groups'; },
+  set view(v) { state.view = v; save(); },
+  // Poslední poloha z GPS. Ručně vybrané místo (hledání, uložené místo) se nepamatuje:
+  // po dalším otevření aplikace se zase začne tam, kde stojíš.
+  get position() { return state.position && !state.position.manual ? state.position : null; }, // { lat, lon, at, manual: false }
+  set position(p) { if (!p.manual) { state.position = p; save(); } },
+  // Uložená místa (celé zastávky), ke kterým se dá přepnout, i když u nich ještě nejsi: [{ id, name, lat, lon }]
+  get places() { return state.places ?? []; },
+  togglePlace(place) {
+    const rest = this.places.filter((p) => p.id !== place.id);
+    state.places = rest.length === this.places.length ? [...rest, place] : rest;
+    save();
+  },
   get lastNode() { return state.lastNode ?? null; },
   set lastNode(id) { state.lastNode = id; save(); },
   // Poslední odjezdy pro 4 naposledy zobrazené uzly – offline zobrazení.

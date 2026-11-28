@@ -25,9 +25,12 @@
   <div class="toolbar">
     <button id="search-btn" class="tool" aria-expanded="false">🔍 Hledat</button>
     <button id="locate" class="tool">📍 Poloha</button>
+    <button id="place-btn" class="tool" aria-pressed="false">☆ Uložit místo</button>
     <button id="only-favs" class="tool" aria-pressed="false">★ Jen oblíbené</button>
+    <button id="view-btn" class="tool">☰ Seznam</button>
     <button id="reload" class="tool" aria-label="Obnovit">⟳</button>
   </div>
+  <div id="places" class="places" hidden></div>
 
   <div id="search" class="search" hidden>
     <input id="q" type="search" placeholder="Název zastávky" autocomplete="off" enterkeyhint="search">

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   distance, nearestNodes, normalize, searchNodes, groupDepartures, formatTimes, subLabel, age, formatDistance, stopBatches,
-  lineKey, stopKey, nodeHasFavs,
+  lineKey, stopKey, nodeHasFavs, flatDepartures, placeOf,
 } from '../web/src/core.js';
 
 const st = (id, p, t, d, n) => ({ g: [id], p, t, d, ...(n ? { n } : {}) });
@@ -168,4 +168,29 @@ test('stáří dat, vzdálenost, dávky ID', () => {
   assert.deepEqual(stopBatches(hellichova), [['U138Z1P', 'U138Z2P']]);
   assert.deepEqual(stopBatches(bulovka, 2).map((b) => b.length), [2, 1]);
   assert.equal(stopKey(bulovka.s[1]), 'U54Z2P');
+});
+
+test('prostý seznam: všechny odjezdy za sebou podle času, oblíbené jen zvýrazněné', () => {
+  const rows = flatDepartures(bulovka, deps, toCenter, { now });
+  assert.equal(rows.length, 13, 'každý odjezd zvlášť, bez slučování');
+  const mins = rows.map((r) => r.t);
+  assert.deepEqual(mins, [...mins].sort((a, b) => a - b), 'seřazeno podle času');
+  assert.ok(rows.some((r) => !r.favLine && !r.favStop), 'neoblíbené tam jsou také');
+  const fav = rows.filter((r) => r.favLine);
+  assert.ok(fav.length > 0 && fav.every((r) => r.key === 'U54Z1P' && ['3', '24'].includes(r.line)), 'zvýrazněná jen 3 a 24 ze sloupku A');
+  assert.ok(!rows.some((r) => r.headsign === 'cizí'));
+  assert.ok(rows.every((r) => r.t >= now - 30_000), 'odjeté pryč');
+
+  const onlyFav = flatDepartures(bulovka, deps, toCenter, { now, onlyFavs: true });
+  assert.ok(onlyFav.length && onlyFav.every((r) => r.favLine));
+  const stopFav = flatDepartures(bulovka, deps, { stops: new Set(['U54Z2P']), lines: new Set() }, { now, onlyFavs: true });
+  assert.ok(stopFav.every((r) => r.key === 'U54Z2P' && r.favStop && !r.favLine));
+  assert.equal(flatDepartures(bulovka, deps, noFavs, { now, limit: 5 }).length, 5);
+});
+
+test('uložené místo si pamatuje část uzlu, ke které se přepíná', () => {
+  assert.deepEqual(placeOf(hellichova, 'Tyršův dům'), { id: 138, name: 'Tyršův dům', lat: 50.0842, lon: 14.4045 });
+  assert.deepEqual(placeOf(bulovka, 'Bulovka'), { id: 54, name: 'Bulovka', lat: 50.1166, lon: 14.4678 });
+  const p = placeOf(hellichova, 'Tyršův dům');
+  assert.equal(nearestNodes(nodes, p.lat, p.lon, 1)[0].name, 'Tyršův dům');
 });

@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  nearestNodes, searchNodes, groupDepartures, formatTimes, subLabel, age, formatDistance, clock,
+  nearestNodes, searchNodes, groupDepartures, flatDepartures, placeOf, formatTimes, subLabel, age, formatDistance, clock,
   stopKey, lineKey, stopBatches,
 } from './core.js';
 import { store } from './store.js';
@@ -150,6 +150,21 @@ function groupHtml(g, title, now) {
   return `<section class="group${g.fav || g.hasFavLine ? ' fav' : ''} m-${g.mode}">${head}${body}${more}</section>`;
 }
 
+// Prostý seznam: všechny odjezdy z uzlu za sebou podle času, oblíbené zvýrazněné.
+function listHtml(rows, now) {
+  return `<section class="group list"><ul>${rows.map((r) => {
+    const x = formatTimes([r], now)[0];
+    const fav = r.favLine || r.favStop;
+    const tag = r.stop.p ? `<small class="pl" title="${esc(r.stop.d.join(', '))}">${esc(r.stop.p)}</small>` : '';
+    return `<li class="dep${fav ? ' fav' : ''}">
+      ${badge(r)}
+      <span class="head">${esc(r.headsign)}${tag}</span>
+      <span class="times"><span class="tm ${x.live ? 'live' : 'plan'}${x.canceled ? ' canceled' : ''} first" title="${x.clock}${x.live ? '' : ' · podle řádu'}">${x.canceled ? '✕' : x.text}${x.late ? `<em class="late">+${x.late}</em>` : ''}</span></span>
+      <button class="star${r.favLine ? ' on' : ''}" data-fav="line" data-key="${esc(lineKey(r.stop, r.line))}" aria-label="Oblíbená linka ${esc(r.line)} z tohoto nástupiště" aria-pressed="${r.favLine}">${r.favLine ? '★' : '☆'}</button>
+    </li>`;
+  }).join('')}</ul></section>`;
+}
+
 function renderBoard() {
   const c = app.candidates[app.index];
   const node = c?.node;
@@ -167,6 +182,12 @@ function renderBoard() {
   }
 
   const now = Date.now();
+  if (store.view === 'list') {
+    const rows = flatDepartures(node, app.data.departures, store.favs(), { now, onlyFavs: store.onlyFavs });
+    board.innerHTML = rows.length ? listHtml(rows, now)
+      : `<p class="empty">${store.onlyFavs ? 'Žádné oblíbené odjezdy. Vypněte „Jen oblíbené“ nebo přidejte hvězdičku.' : 'V příštích 90 minutách odtud nic neodjíždí.'}</p>`;
+    return;
+  }
   const groups = groupDepartures(node, app.data.departures, store.favs(), { now, onlyFavs: store.onlyFavs, expanded: app.expanded });
   if (!groups.length) {
     board.innerHTML = '<p class="empty">Na této zastávce nemáte oblíbené. Vypněte „Jen oblíbené“ nebo přidejte hvězdičku.</p>';
@@ -200,6 +221,15 @@ function render() {
   $('dots').innerHTML = app.candidates.map((x, i) =>
     `<button class="dot${i === app.index ? ' on' : ''}" data-i="${i}" aria-label="${i + 1}. nejbližší: ${esc(x.name)}"></button>`).join('');
   $('only-favs').setAttribute('aria-pressed', store.onlyFavs);
+  $('view-btn').textContent = store.view === 'list' ? '▦ Po směrech' : '☰ Seznam';
+  const saved = c ? store.places.some((p) => p.id === c.node.id) : false;
+  $('place-btn').setAttribute('aria-pressed', saved);
+  $('place-btn').textContent = saved ? '★ Uložené místo' : '☆ Uložit místo';
+  $('place-btn').disabled = !c;
+  const places = store.places;
+  $('places').hidden = !places.length;
+  $('places').innerHTML = places.map((p, i) =>
+    `<button class="place${c && c.node.id === p.id ? ' on' : ''}" data-place="${i}">★ ${esc(p.name)}</button>`).join('');
 
   const notice = $('notice');
   const gps = { denied: 'Poloha je zakázaná – vyhledejte zastávku ručně.', unavailable: 'Polohu se nepodařilo zjistit.', unsupported: 'Prohlížeč neumí zjistit polohu.' }[app.gpsError];
@@ -246,6 +276,17 @@ $('reload').addEventListener('click', refresh);
 $('prev').addEventListener('click', () => showNode(app.index - 1));
 $('next').addEventListener('click', () => showNode(app.index + 1));
 $('only-favs').addEventListener('click', () => { store.onlyFavs = !store.onlyFavs; render(); });
+$('view-btn').addEventListener('click', () => { store.view = store.view === 'list' ? 'groups' : 'list'; render(); });
+$('place-btn').addEventListener('click', () => {
+  const c = app.candidates[app.index];
+  if (!c) return;
+  store.togglePlace(placeOf(c.node, c.name));
+  render();
+});
+$('places').addEventListener('click', (e) => {
+  const place = store.places[Number(e.target.closest('[data-place]')?.dataset.place)];
+  if (place) setPosition({ lat: place.lat, lon: place.lon, at: Date.now(), manual: true });
+});
 $('dots').addEventListener('click', (e) => {
   const i = e.target.closest('[data-i]')?.dataset.i;
   if (i !== undefined) showNode(Number(i));
@@ -284,8 +325,11 @@ $('board').addEventListener('touchend', (e) => {
 // Obnovení jen při otevřené aplikaci; po návratu hned obnovit a znovu zjistit polohu.
 setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, REFRESH_MS);
 setInterval(() => { if (document.visibilityState === 'visible') { renderBoard(); renderStatus(); } }, 10_000);
+let hiddenAt = 0;
+const MANUAL_KEEP_MS = 10 * 60_000; // ručně vybrané místo platí i po krátkém odskoku z aplikace
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
+  if (document.visibilityState !== 'visible') { hiddenAt = Date.now(); return; }
+  if (app.position?.manual && hiddenAt && Date.now() - hiddenAt > MANUAL_KEEP_MS) app.position = { ...app.position, manual: false };
   if (app.position && !app.position.manual) locate();
   refresh();
 });

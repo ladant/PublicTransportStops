@@ -73,6 +73,11 @@ Se skutečnými daty: `GOLEMIO_API_KEY=… npm run dev:proxy` (klíč zdarma po 
   hvězdička v záhlaví sloupku = všechny linky z něj
 - sloupky s oblíbenými jsou nahoře, ostatní sbalené do jednoho řádku s nejbližšími odjezdy (klepnutím
   se rozbalí); uzel bez oblíbených je rozbalený; „Jen oblíbené“ skryje zbytek
+- přepínač „Seznam“: prostý seznam všech odjezdů za sebou podle času (nástupiště jako malý štítek),
+  oblíbené jen zvýrazněné; „Jen oblíbené“ funguje v obou zobrazeních
+- „Uložit místo“: celá zastávka jako oblíbená; uložená místa jsou tlačítka pod lištou a jedním klepnutím
+  se přepne na ně, i když u nich ještě nejsi. Ručně vybrané místo se nepamatuje: po novém otevření nebo
+  po 10 minutách mimo aplikaci se zase začne u GPS
 - bez sítě poslední data s časem; zakázaná poloha → hledání zastávky; prázdný stav „nic neodjíždí“
 - poslední poloha a zastávka se ukáže hned při otevření, GPS ji pak upřesní
 

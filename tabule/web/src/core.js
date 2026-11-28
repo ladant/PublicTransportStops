@@ -148,6 +148,31 @@ export function groupDepartures(node, departures, favs, { now = Date.now(), only
   return out;
 }
 
+// Prostý seznam odjezdů za sebou podle času, všechny sloupky dohromady. Oblíbené jsou jen zvýrazněné:
+// favLine = oblíbená linka z tohoto nástupiště, favStop = oblíbený celý sloupek.
+export function flatDepartures(node, departures, favs, { now = Date.now(), onlyFavs = false, limit = 60 } = {}) {
+  const byId = new Map();
+  node.s.forEach((stop) => stop.g.forEach((id) => byId.set(id, stop)));
+  const rows = [];
+  for (const d of departures) {
+    const stop = byId.get(d.stop);
+    if (!stop) continue;
+    const t = depTime(d);
+    if (!(t >= now - 30_000)) continue;
+    const favLine = favs.lines.has(lineKey(stop, d.line));
+    const favStop = favs.stops.has(stopKey(stop));
+    if (onlyFavs && !favLine && !favStop) continue;
+    rows.push({ stop, key: stopKey(stop), line: d.line, type: d.type, headsign: d.headsign, night: d.night, favLine, favStop, t, realtime: d.realtime, delay: d.delay, canceled: d.canceled });
+  }
+  return rows.sort((a, b) => a.t - b.t).slice(0, limit);
+}
+
+// Uložené místo: název části uzlu, ke které se přepíná, a její souřadnice (špendlík se zapíchne tam).
+export function placeOf(node, name) {
+  const part = node.x?.find((p) => p[2] === name);
+  return { id: node.id, name, lat: part ? part[0] : node.lat, lon: part ? part[1] : node.lon };
+}
+
 // Časy jednoho řádku k zobrazení: první "2 min" (nebo hodina odjezdu, když je za víc než hodinu),
 // další jen čísla: "9 · 17".
 export function formatTimes(times, now = Date.now()) {
