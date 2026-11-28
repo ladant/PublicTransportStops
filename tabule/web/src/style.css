@@ -44,29 +44,41 @@ h1 { margin: 0; font-size: 1.35rem; white-space: nowrap; overflow: hidden; text-
 
 main { flex: 1; padding: 0 12px; touch-action: pan-y; }
 .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
-.group { background: var(--card); border-radius: 14px; margin-bottom: 10px; overflow: hidden; }
-.group.fav { box-shadow: inset 4px 0 0 var(--star); }
-.group h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 6px 6px 14px; font-size: .85rem; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line); }
-.group h2 span { flex: 1; min-width: 0; }
+.group { background: var(--card); border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
+.group.fav { box-shadow: inset 3px 0 0 var(--star); }
+.gh { display: flex; align-items: center; gap: 6px; padding: 2px 2px 2px 12px; min-height: 36px; font-size: .82rem; color: var(--muted); border-bottom: 1px solid var(--line); }
+.gh.tog { cursor: pointer; }
+.gt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gt b { color: var(--fg); }
+.gt .sub { font-style: normal; color: var(--accent); margin-left: 4px; }
+.chev { color: var(--muted); }
+.m-collapsed .gh { border-bottom: 0; }
+.summary { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0 12px 8px; font-size: .9rem; }
+.chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-weight: 600; }
+.muted { color: var(--muted); font-size: .85rem; }
+.none { margin: 0; padding: 8px 12px 10px; }
 .group ul { list-style: none; margin: 0; padding: 0; }
-.dep { display: grid; grid-template-columns: 3.2rem 1fr auto 40px; align-items: center; gap: 10px; padding: 8px 6px 8px 14px; border-top: 1px solid var(--line); }
+.dep { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) auto 34px; align-items: center; gap: 8px; padding: 1px 2px 1px 12px; min-height: 38px; border-top: 1px solid var(--line); }
 .dep:first-child { border-top: 0; }
 .dep.fav { background: var(--fav); }
-.dep.canceled .head, .dep.canceled .line { text-decoration: line-through; opacity: .6; }
-.line { justify-self: start; min-width: 2.6rem; padding: 3px 6px; border-radius: 6px; text-align: center; font-weight: 700; color: #fff; background: var(--bus); }
+.line { justify-self: start; min-width: 2.3rem; padding: 2px 5px; border-radius: 6px; text-align: center; font-weight: 700; font-size: .92rem; color: #fff; background: var(--bus); }
+.line.mini { min-width: 0; padding: 0 5px; font-size: .8rem; }
 .t-tram { background: var(--tram); } .t-trolleybus { background: var(--trolleybus); } .t-train { background: var(--train); }
 .t-ferry { background: var(--ferry); } .t-funicular { background: var(--funicular); }
 .metro-A { background: var(--metro-A); } .metro-B { background: var(--metro-B); color: #14181f; } .metro-C { background: var(--metro-C); }
 .line.night { background: var(--night); color: #fff; outline: 1px solid var(--muted); }
-.head { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.when { text-align: right; display: flex; flex-direction: column; }
-.when b { font-size: 1.05rem; }
-.when small { color: var(--muted); font-size: .78rem; }
-.when.live b::before { content: "● "; color: var(--live); font-size: .7em; vertical-align: middle; }
-.when.plan b { font-weight: 500; font-style: italic; }
-.late { color: var(--late); font-style: normal; font-weight: 700; }
-.star { width: 40px; height: 40px; border: 0; background: none; font-size: 1.25rem; color: var(--muted); }
+.head { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; }
+.times { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; font-size: .9rem; }
+.times i { color: var(--muted); font-style: normal; }
+.tm.first { font-size: 1rem; font-weight: 700; }
+.tm.live.first::before { content: "● "; color: var(--live); font-size: .6em; vertical-align: .15em; }
+.tm.plan { font-style: italic; }
+.tm.plan:not(.first) { color: var(--muted); }
+.tm.canceled { text-decoration: line-through; color: var(--muted); }
+.late { color: var(--late); font-style: normal; font-weight: 700; font-size: .78rem; margin-left: 3px; }
+.star { width: 34px; height: 34px; border: 0; background: none; font-size: 1.1rem; color: var(--muted); padding: 0; }
 .star.on { color: var(--star); }
+.more { display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: none; padding: 8px 12px; text-align: left; color: var(--accent); font-size: .85rem; }
 
 .dots { display: flex; justify-content: center; gap: 4px; padding: 8px; }
 .dot { width: 28px; height: 28px; border: 0; background: none; padding: 0; position: relative; }

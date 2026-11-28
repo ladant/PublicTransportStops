@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  nearestNodes, searchNodes, groupDepartures, countdown, age, formatDistance, clock,
+  nearestNodes, searchNodes, groupDepartures, formatTimes, subLabel, age, formatDistance, clock,
   stopKey, lineKey, stopBatches,
 } from './core.js';
 import { store } from './store.js';
@@ -19,6 +19,7 @@ const app = {
   data: null, // { nodeId, departures, fetchedAt (ms), live: bool, error }
   loading: false,
   gpsError: null,
+  expanded: new Set(), // rozbalené sloupky, jen v této relaci
 };
 
 // ---------- data ----------
@@ -62,6 +63,7 @@ function showNode(i) {
   if (!app.candidates.length) return;
   app.index = (i + app.candidates.length) % app.candidates.length;
   const node = current();
+  app.expanded.clear();
   store.lastNode = node.id;
   const saved = store.departures(node.id);
   app.data = saved ? { nodeId: node.id, ...saved, live: false } : null;
@@ -99,20 +101,58 @@ function locate() {
 
 const TYPE_LABEL = { tram: 'Tram', bus: 'Bus', trolleybus: 'Trolejbus', train: 'Vlak', ferry: 'Přívoz', funicular: 'Lanovka', metro: 'Metro' };
 
-function badge(d) {
+function badge(d, mini = false) {
   const metro = d.type === 'metro' ? ` metro-${esc(d.line)}` : '';
-  return `<span class="line t-${esc(d.type)}${metro}${d.night ? ' night' : ''}">${esc(d.line)}</span>`;
+  return `<span class="line${mini ? ' mini' : ''} t-${esc(d.type)}${metro}${d.night ? ' night' : ''}">${esc(d.line)}</span>`;
 }
 
-function stopTitle(stop) {
-  const type = stop.t.startsWith('metro') ? 'Metro' : TYPE_LABEL[stop.t] ?? '';
-  const plat = stop.p ? ` ${esc(stop.p)}` : '';
-  const dirs = stop.d.length ? ` · směr ${stop.d.map(esc).join(', ')}` : '';
-  return `${type}${plat}${dirs}`;
+// "Tram B → Kobylisy, Nádraží Holešovice +1"; pod tím případné upřesnění sloupku (Tyršův dům, ul. Plzeňská).
+function stopTitle(stop, title) {
+  const type = stop.t.startsWith('metro') ? `Metro ${stop.t.slice(5)}` : `${TYPE_LABEL[stop.t] ?? ''}${stop.p ? ` ${stop.p}` : ''}`;
+  const dirs = stop.d.slice(0, 2).map(esc).join(', ') + (stop.d.length > 2 ? ` +${stop.d.length - 2}` : '');
+  const sub = subLabel(stop.n, title);
+  return `<b>${esc(type)}</b>${sub ? ` <em class="sub">${esc(sub)}</em>` : ''}${dirs ? ` <span class="dir">→ ${dirs}</span>` : ''}`;
+}
+
+function timesHtml(row, now) {
+  return formatTimes(row.times, now).map((x, i) => {
+    const cls = `${x.live ? 'live' : 'plan'}${x.canceled ? ' canceled' : ''}`;
+    const late = i === 0 && x.late ? `<em class="late">+${x.late}</em>` : '';
+    return `<span class="tm ${cls}${i === 0 ? ' first' : ''}" title="${x.clock}${x.live ? '' : ' · podle řádu'}">${x.canceled ? '✕' : x.text}${late}</span>`;
+  }).join('<i>·</i>');
+}
+
+function rowHtml(row, g, now) {
+  return `<li class="dep${row.favLine ? ' fav' : ''}">
+    ${badge(row)}
+    <span class="head">${esc(row.headsign)}</span>
+    <span class="times">${timesHtml(row, now)}</span>
+    <button class="star${row.favLine ? ' on' : ''}" data-fav="line" data-key="${esc(lineKey(g.stop, row.line))}" aria-label="Oblíbená linka ${esc(row.line)} z tohoto nástupiště" aria-pressed="${row.favLine}">${row.favLine ? '★' : '☆'}</button>
+  </li>`;
+}
+
+function groupHtml(g, title, now) {
+  const toggle = g.mode === 'collapsed' || g.expanded || g.more > 0;
+  const star = `<button class="star${g.fav ? ' on' : ''}" data-fav="stop" data-key="${esc(g.key)}" aria-label="Všechny linky z tohoto nástupiště" aria-pressed="${g.fav}">${g.fav ? '★' : '☆'}</button>`;
+  const head = `<div class="gh${toggle ? ' tog' : ''}" ${toggle ? `data-toggle="${esc(g.key)}"` : ''}>
+      <span class="gt">${stopTitle(g.stop, title)}</span>${toggle ? `<span class="chev">${g.expanded ? '⌃' : '⌄'}</span>` : ''}${star}</div>`;
+  let body = '';
+  if (g.mode === 'collapsed') {
+    body = `<div class="summary">${g.summary.length
+      ? g.summary.map((r) => `<span class="chip">${badge(r, true)} ${formatTimes(r.times.slice(0, 1), now)[0].text}</span>`).join('')
+      : '<span class="muted">nic v příštích 90 min</span>'}</div>`;
+  } else if (g.rows.length) {
+    body = `<ul>${g.rows.map((r) => rowHtml(r, g, now)).join('')}</ul>`;
+  } else {
+    body = `<p class="muted none">${g.hasFavLine && !g.fav ? 'Oblíbené linky teď nejedou.' : 'V příštích 90 min nic.'}</p>`;
+  }
+  const more = g.more > 0 && !g.expanded && g.mode !== 'collapsed' ? `<button class="more" data-toggle="${esc(g.key)}">Další linky (${g.more})</button>` : '';
+  return `<section class="group${g.fav || g.hasFavLine ? ' fav' : ''} m-${g.mode}">${head}${body}${more}</section>`;
 }
 
 function renderBoard() {
-  const node = current();
+  const c = app.candidates[app.index];
+  const node = c?.node;
   const board = $('board');
   if (!node) {
     board.innerHTML = app.nodes.length
@@ -121,38 +161,22 @@ function renderBoard() {
     return;
   }
   if (!app.data) { board.innerHTML = '<p class="empty">Načítám odjezdy…</p>'; return; }
-
-  const now = Date.now();
-  const favs = store.favs();
-  const groups = groupDepartures(node, app.data.departures, favs, { now, onlyFavs: store.onlyFavs });
-  const withRows = groups.filter((g) => g.rows.length);
-  if (!withRows.length && app.data.error && !app.data.fetchedAt) {
+  if (app.data.error && !app.data.fetchedAt && !app.data.departures.length) {
     board.innerHTML = `<p class="empty">${app.data.error === 'offline' ? 'Jste offline a pro tuto zastávku nejsou uložená data.' : 'Odjezdy se nepodařilo načíst. Zkusím to znovu za chvíli.'}</p>`;
     return;
   }
-  if (!withRows.length) {
-    board.innerHTML = store.onlyFavs && groups.length === 0
-      ? '<p class="empty">Na této zastávce nemáte oblíbené. Vypněte „Jen oblíbené“ nebo přidejte hvězdičku.</p>'
-      : '<p class="empty">V příštích 90 minutách odtud nic neodjíždí.</p>';
+
+  const now = Date.now();
+  const groups = groupDepartures(node, app.data.departures, store.favs(), { now, onlyFavs: store.onlyFavs, expanded: app.expanded });
+  if (!groups.length) {
+    board.innerHTML = '<p class="empty">Na této zastávce nemáte oblíbené. Vypněte „Jen oblíbené“ nebo přidejte hvězdičku.</p>';
     return;
   }
-  board.innerHTML = withRows.map((g) => `
-    <section class="group${g.fav ? ' fav' : ''}">
-      <h2><span>${stopTitle(g.stop)}</span>
-        <button class="star${g.fav ? ' on' : ''}" data-fav="stop" data-key="${esc(stopKey(g.stop))}" aria-label="Oblíbený směr" aria-pressed="${g.fav}">${g.fav ? '★' : '☆'}</button>
-      </h2>
-      <ul>${g.rows.map((d) => `
-        <li class="dep${d.favLine ? ' fav' : ''}${d.canceled ? ' canceled' : ''}">
-          ${badge(d)}
-          <span class="head">${esc(d.headsign)}</span>
-          <span class="when${d.realtime ? ' live' : ' plan'}" title="${d.realtime ? 'živě' : 'podle jízdního řádu'}">
-            <b>${d.canceled ? 'odřeknuto' : countdown(d.t, now)}</b>
-            <small>${clock(d.t)}${d.realtime ? (d.delay >= 60 ? ` <em class="late">+${Math.round(d.delay / 60)}</em>` : '') : ' řád'}</small>
-          </span>
-          <button class="star${d.favLine ? ' on' : ''}" data-fav="line" data-key="${esc(lineKey(g.stop, d.line))}" aria-label="Oblíbená linka ${esc(d.line)}" aria-pressed="${d.favLine}">${d.favLine ? '★' : '☆'}</button>
-        </li>`).join('')}
-      </ul>
-    </section>`).join('');
+  if (groups.every((g) => g.empty)) {
+    board.innerHTML = '<p class="empty">V příštích 90 minutách odtud nic neodjíždí.</p>';
+    return;
+  }
+  board.innerHTML = groups.map((g) => groupHtml(g, c.name, now)).join('');
 }
 
 function renderStatus() {
@@ -168,13 +192,13 @@ function renderStatus() {
 
 function render() {
   const c = app.candidates[app.index];
-  $('name').textContent = c ? c.node.n : 'Odjezdy';
+  $('name').textContent = c ? c.name : 'Odjezdy';
   $('meta').textContent = c
     ? [c.node.m, formatDistance(c.dist), app.position?.manual ? 'vybráno ručně' : null].filter(Boolean).join(' · ')
     : '';
   $('prev').disabled = $('next').disabled = app.candidates.length < 2;
   $('dots').innerHTML = app.candidates.map((x, i) =>
-    `<button class="dot${i === app.index ? ' on' : ''}" data-i="${i}" aria-label="${i + 1}. nejbližší: ${esc(x.node.n)}"></button>`).join('');
+    `<button class="dot${i === app.index ? ' on' : ''}" data-i="${i}" aria-label="${i + 1}. nejbližší: ${esc(x.name)}"></button>`).join('');
   $('only-favs').setAttribute('aria-pressed', store.onlyFavs);
 
   const notice = $('notice');
@@ -194,22 +218,24 @@ function openSearch(open = true) {
   if (open) $('q').focus();
 }
 
+let hits = [];
 $('q').addEventListener('input', () => {
-  const hits = searchNodes(app.nodes, $('q').value);
-  $('results').innerHTML = hits.map((n) =>
-    `<li><button data-node="${n.id}">${esc(n.n)}${n.m ? ` <small>${esc(n.m)}</small>` : ''}</button></li>`).join('');
+  hits = searchNodes(app.nodes, $('q').value);
+  $('results').innerHTML = hits.map((h, i) => {
+    const other = (h.node.x ?? []).map((p) => p[2]).filter((n) => n !== h.name);
+    return `<li><button data-hit="${i}">${esc(h.name)}${h.node.m ? ` <small>${esc(h.node.m)}</small>` : ''}${other.length ? ` <small>${other.slice(0, 2).map(esc).join(', ')}${other.length > 2 ? ' …' : ''}</small>` : ''}</button></li>`;
+  }).join('');
 });
 $('q').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') $('results').querySelector('button')?.click();
 });
 $('results').addEventListener('click', (e) => {
-  const id = Number(e.target.closest('[data-node]')?.dataset.node);
-  const node = app.nodes.find((n) => n.id === id);
-  if (!node) return;
+  const hit = hits[Number(e.target.closest('[data-hit]')?.dataset.hit)];
+  if (!hit) return;
   openSearch(false);
   $('q').value = '';
   $('results').innerHTML = '';
-  setPosition({ lat: node.lat, lon: node.lon, at: Date.now(), manual: true });
+  setPosition({ lat: hit.lat, lon: hit.lon, at: Date.now(), manual: true });
 });
 
 // ---------- ovládání ----------
@@ -226,9 +252,17 @@ $('dots').addEventListener('click', (e) => {
 });
 $('board').addEventListener('click', (e) => {
   const b = e.target.closest('[data-fav]');
-  if (!b) return;
-  store.toggleFav(b.dataset.fav, b.dataset.key);
-  renderBoard();
+  if (b) {
+    store.toggleFav(b.dataset.fav, b.dataset.key);
+    renderBoard();
+    return;
+  }
+  const t = e.target.closest('[data-toggle]');
+  if (t) {
+    const key = t.dataset.toggle;
+    app.expanded.has(key) ? app.expanded.delete(key) : app.expanded.add(key);
+    renderBoard();
+  }
 });
 document.addEventListener('keydown', (e) => {
   if (e.target.matches('input')) return;

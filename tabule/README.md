@@ -64,8 +64,15 @@ Se skutečnými daty: `GOLEMIO_API_KEY=… npm run dev:proxy` (klíč zdarma po 
 
 - nejbližší uzel podle GPS, 2.–4. nejbližší šipkami / swipem / tečkami
 - hlavička: název uzlu, vzdálenost, čas aktualizace, ruční obnovení
-- odjezdy po směrech (sloupcích): linka, cíl, odpočet, čas, zpoždění, živě (●) vs. podle řádu
-- oblíbené směry a linky ve směru: zvýraznění, řazení nahoru, přepínač „jen oblíbené“
+- místo = přestupní uzel PID se všemi sloupky (nástupišti); uzel s víc názvy (Pražské Jezulátko / Tyršův dům,
+  Václavské náměstí / Můstek) je jedno místo, v záhlaví je název části, ke které jsi nejblíž
+- odjezdy po sloupcích (směrech); jeden řádek na linku a cíl s třemi nejbližšími časy
+  (`3 min · 11 · 19`), živě (●) vs. podle řádu (kurzíva), zpoždění
+- oblíbené platí jen pro konkrétní sloupek: hvězdička u linky = „tahle linka z tohoto nástupiště“
+  (nepřenáší se na jiný sloupek ani jinou zastávku, výluková varianta se stejným číslem se chytí);
+  hvězdička v záhlaví sloupku = všechny linky z něj
+- sloupky s oblíbenými jsou nahoře, ostatní sbalené do jednoho řádku s nejbližšími odjezdy (klepnutím
+  se rozbalí); uzel bez oblíbených je rozbalený; „Jen oblíbené“ skryje zbytek
 - bez sítě poslední data s časem; zakázaná poloha → hledání zastávky; prázdný stav „nic neodjíždí“
 - poslední poloha a zastávka se ukáže hned při otevření, GPS ji pak upřesní
 
