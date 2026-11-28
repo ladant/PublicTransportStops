@@ -5,3 +5,12 @@ compatibility_date = "2026-11-01"
 [vars]
 # Po nasazení aplikace zúžit na její origin, např. "https://ladant.github.io"
 ALLOWED_ORIGIN = "*"
+
+# Jedna globální instance se sdílenou cache (viz worker.js). SQLite varianta je i v bezplatném tarifu.
+[[durable_objects.bindings]]
+name = "CACHE"
+class_name = "DepartureCache"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DepartureCache"]

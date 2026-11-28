@@ -17,13 +17,28 @@ telefon (PWA)  ──/v1/departures──►  proxy (serverless, cache 30 s)  �
 | `proxy/format.js` | sjednocený formát odjezdů pro všechny dopravce |
 | `proxy/adapters/pid.js` | Praha přes Golemio `/v2/pid/departureboards` |
 | `proxy/adapters/mock.js` | vymyšlené odjezdy pro vývoj bez klíče |
-| `proxy/worker.js`, `wrangler.toml` | nasazení na Cloudflare Workers |
+| `proxy/worker.js`, `wrangler.toml` | nasazení na Cloudflare Workers: všechny dotazy jdou do jedné instance (Durable Object), takže cache sdílí všechny telefony |
 | `proxy/dev-server.js` | lokální proxy na Node |
 | `scripts/build-stops.mjs` | seznam zastávek PID → `web/public/data/stops-pid.json` |
 | `web/src/core.js` | výpočty bez DOM: nejbližší uzly, hledání, seskupení po směrech, oblíbené, odpočet |
 | `web/src/store.js` | co se ukládá v telefonu (oblíbené, poloha, poslední odjezdy) |
 | `web/src/main.js` | obrazovka, přepínání swipem/šipkami, obnovení 25 s při otevřené aplikaci |
 | `web/public/sw.js` | offline: aplikace a zastávky z cache, odjezdy vždy ze sítě |
+
+## Zátěž Golemia
+
+Golemio se neptá každý telefon. Proxy drží odjezdy 30 s a souběžné dotazy na stejný uzel spojí,
+takže na Golemio jdou nejvýš 2 dotazy za minutu na uzel, který má někdo právě otevřený – ať ho
+sleduje jeden člověk nebo tisíc. Zátěž tedy roste s počtem různých sledovaných zastávek, ne s počtem
+telefonů. Na Cloudflare to zajišťuje jedna globální instance proxy (Durable Object); Cache API by
+sdílelo jen v rámci datacentra a na `*.workers.dev` nefunguje vůbec.
+
+Kdyby uživatelů byly stovky a rozptýlených zastávek moc, další krok je celosíťový feed:
+proxy jednou za 20–30 s stáhne GTFS Realtime celé PID a odjezdy spočítá sama z jízdního řádu
+(~3 dotazy za minutu bez ohledu na počet uživatelů, formát pro telefon se nemění).
+
+Limity bezplatného Cloudflare: 100 000 dotazů denně na Worker i na Durable Object, tj. zhruba
+20 000 otevření aplikace na pár minut.
 
 ## Vývoj
 
@@ -40,7 +55,7 @@ Se skutečnými daty: `GOLEMIO_API_KEY=… npm run dev:proxy` (klíč zdarma po 
 
 ## Nasazení (zatím neproběhlo)
 
-1. Proxy: `cd tabule/proxy && npx wrangler deploy`, klíč `npx wrangler secret put GOLEMIO_API_KEY`,
+1. Proxy: `cd tabule/proxy && npx wrangler deploy` (lokálně `npx wrangler dev --var MOCK:1`), klíč `npx wrangler secret put GOLEMIO_API_KEY`,
    v `wrangler.toml` zúžit `ALLOWED_ORIGIN` na origin aplikace.
 2. Aplikace: `VITE_API_BASE=https://<proxy>.workers.dev npm run stops && npm run build` → statický `dist/`
    (relativní cesty, funguje i v podsložce GitHub Pages).
@@ -59,4 +74,5 @@ Se skutečnými daty: `GOLEMIO_API_KEY=… npm run dev:proxy` (klíč zdarma po 
 - klíč Golemio, ověřit skutečný tvar odpovědi a limity (adaptér je napsaný podle dokumentace, netestovaný naživo)
 - nasadit proxy a aplikaci, test na iPhonu a Androidu (poloha, ukládání, návrat do aplikace)
 - denní obnova `stops-pid.json` v CI
+- při stovkách uživatelů: celosíťový GTFS Realtime feed místo dotazů po zastávkách (viz Zátěž Golemia)
 - Belgie: adaptéry za stejným formátem (`region=be`), seznam zastávek z GTFS
